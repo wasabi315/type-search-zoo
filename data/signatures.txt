@@ -1,0 +1,28 @@
+id : a -> a
+const : a -> b -> a
+apply : (a -> b) -> a -> b
+ap : (a -> b -> c) -> (a -> b) -> a -> c
+flip : (a -> b -> c) -> (b -> a -> c)
+on : (a -> b) -> (b -> b -> c) -> (a -> a -> c)
+
+map : (a -> b) -> [a] -> [b]
+foldr : (a -> b -> b) -> b -> [a] -> b
+foldr1 : (a -> a -> a) -> [a] -> a
+foldl : (b -> a -> b) -> b -> [a] -> b
+foldl1 : (a -> a -> a) -> [a] -> a
+concat : [[a]] -> [a]
+concatMap : (a -> [b]) -> [a] -> [b]
+zip : [a] -> [b] -> [a * b]
+zipWith : (a -> b -> c) -> [a] -> [b] -> [c]
+apList : [a -> b] -> [a] -> [b]
+singleton : a -> [a]
+repeat : a -> [a]
+
+fst : a * b -> a
+snd : a * b -> b
+curry : (a * b -> c) -> (a -> b -> c)
+uncurry : (a -> b -> c) -> (a * b -> c)
+swap : a * b -> b * a
+bimapPair : (a -> b) -> (c -> d) -> (a * c) -> (b * d)
+diag : a -> a * a
+duplicatePair : e * a -> e * (e * a)
