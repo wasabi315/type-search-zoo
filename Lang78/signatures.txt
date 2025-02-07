@@ -1,0 +1,16 @@
+id : a -> a
+const : a -> b -> a
+apply : (a -> b) -> a -> b
+ap : (a -> b -> c) -> (a -> b) -> a -> c
+flip : (a -> b -> c) -> (b -> a -> c)
+on : (a -> b) -> (b -> b -> c) -> (a -> a -> c)
+
+fst : a * b -> a
+snd : a * b -> b
+curry : (a * b -> c) -> (a -> b -> c)
+uncurry : (a -> b -> c) -> (a * b -> c)
+swap : a * b -> b * a
+bimap : (a -> b) -> (c -> d) -> (a * c) -> (b * d)
+diag : a -> a * a
+duplicate : e * a -> e * (e * a)
+assoc : (a * b) * c -> a * (b * c)
