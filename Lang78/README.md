@@ -16,6 +16,8 @@ bimap : (a -> b) -> (c -> d) -> a * c -> b * d
   by instantiating {a := b, b := (), c := (), d := a}
 ```
 
+`stack run -- signatures.txt` to run.
+
 ## References
 
 - Bernard Lang. 2005. Matching with multiplication and exponentiation (extended abstract). Math. Struct. Comput. Sci. 15, 05 (October 2005), 959. https://doi.org/10.1017/s0960129505004883
