@@ -23,6 +23,7 @@ import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
 --------------------------------------------------------------------------------
+-- Types
 
 infixr 5 `Prod`
 
@@ -42,6 +43,7 @@ instance IsString Ty where
   fromString x = Var (fromString x)
 
 --------------------------------------------------------------------------------
+-- Normal form of types
 
 infix 4 `NFArr`
 
@@ -56,6 +58,7 @@ data Factor = NF `NFArr` Atom
 type NF = MultiSet Factor
 
 --------------------------------------------------------------------------------
+-- Main algorithm
 
 {-
 
@@ -139,6 +142,7 @@ equiv a b =
    in any (\r -> a' == reduce (rename r b)) rs
 
 --------------------------------------------------------------------------------
+-- Parsing
 
 type Parser = Parsec Void Text
 
@@ -193,7 +197,7 @@ orDie :: (Exception e) => Either e a -> IO a
 orDie = either (\e -> putStrLn (displayException e) >> exitFailure) pure
 
 helpText :: String
-helpText = "Enter a type to query, :q to quit, or :h for help.\n<type> ::= <var> | () | <type> * <type> | <type> -> <type> | [<type>]"
+helpText = "Enter a type to query, :q to quit, or :h for help.\nType syntax:\n  <var>  ::= [a-z][a-zA-Z0-9]\n  <type> ::= <var> | () | <type> * <type> | <type> -> <type> | [<type>]"
 
 main :: IO ()
 main = do
