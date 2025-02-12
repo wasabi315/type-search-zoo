@@ -33,6 +33,7 @@ import Prelude hiding (exponent)
 --------------------------------------------------------------------------------
 -- Utils
 
+-- | Like @insert@, but returns Nothing if the key already exists with a different value.
 insertNoConflict :: (Ord k, Eq a) => k -> a -> Map k a -> Maybe (Map k a)
 insertNoConflict k v =
   M.alterF
@@ -41,6 +42,7 @@ insertNoConflict k v =
       _ -> Just (Just v)
     k
 
+-- | Like @union@, but returns Nothing if the two maps have conflicting values.
 unionNoConflict :: (Ord k, Eq a) => Map k a -> Map k a -> Maybe (Map k a)
 unionNoConflict =
   M.mergeA
@@ -48,18 +50,9 @@ unionNoConflict =
     M.preserveMissing
     (M.zipWithAMatched \_ x y -> if x == y then Just x else Nothing)
 
+-- | Like @unions@, but returns Nothing if the maps have conflicting values.
 unionsNoConflict :: (Ord k, Eq a, Foldable t) => t (Map k a) -> Maybe (Map k a)
 unionsNoConflict = foldlM unionNoConflict M.empty
-
--- from the rio package
-foldMapM :: (Monad m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
-foldMapM f =
-  foldlM
-    ( \acc a -> do
-        w <- f a
-        return $! mappend acc w
-    )
-    mempty
 
 --------------------------------------------------------------------------------
 -- Types
@@ -71,16 +64,17 @@ infixr 4 `Arr`
 type Name = Text
 
 data Ty
-  = Var Name
-  | Const Name
-  | Unit
-  | Ty `Prod` Ty
-  | Ty `Arr` Ty
+  = Var Name -- a
+  | Const Name -- C (e.g. Int)
+  | Unit -- ()
+  | Ty `Prod` Ty -- t * t
+  | Ty `Arr` Ty -- t -> t
   deriving stock (Eq, Ord, Show)
 
 instance IsString Ty where
   fromString x = Var (T.pack x)
 
+-- | Change all variables to constants.
 freezeVars :: Ty -> Ty
 freezeVars = \case
   Var x -> Const x
@@ -89,6 +83,7 @@ freezeVars = \case
   a `Prod` b -> freezeVars a `Prod` freezeVars b
   a `Arr` b -> freezeVars a `Arr` freezeVars b
 
+-- | The set of variables in a type.
 varSet :: Ty -> Set Name
 varSet = \case
   Var x -> S.singleton x
@@ -96,8 +91,6 @@ varSet = \case
   Unit -> mempty
   a `Prod` b -> varSet a <> varSet b
   a `Arr` b -> varSet a <> varSet b
-
--- Substitution for Ty
 
 type Subst = Map Name Ty
 
@@ -200,7 +193,7 @@ infix 4 `baseMatches`
 
 infix 4 `nfMatches`
 
--- Given p and s, returns the largest set of BSubsts such that each BSubst ω satisfies bsubst ω p = s
+-- Given p and s, returns a list of BSubsts such that each BSubst ω satisfies bsubst ω p = s
 baseMatches :: Base -> Base -> [BSubst]
 baseMatches = \cases
   [] [] -> pure M.empty
@@ -222,24 +215,25 @@ genName = do
 -- Returns the most general type that has the given base
 mostGeneral :: Base -> IO NF
 mostGeneral =
-  foldMapM
+  traverse
     \case
       AVar x -> do
         y <- genName
-        pure [nfVar y `FArr` AVar x]
+        pure $ nfVar y `FArr` AVar x
       AConst c -> do
         y <- genName
-        pure [nfVar y `FArr` AConst c]
+        pure $ nfVar y `FArr` AConst c
 
 mostGeneralSubst :: BSubst -> IO NFSubst
 mostGeneralSubst = traverse mostGeneral
 
+-- Given a pattern and a subject, returns a list of NFSubsts such that each NSubst σ satisfies nfSubst σ pat = subj
 nfMatches :: NF -> NF -> IO [NFSubst]
-nfMatches p s = do
-  let bsubs = base p `baseMatches` base s
-  flip foldMapM bsubs \bsub -> do
+nfMatches pat subj = do
+  let bsubs = base pat `baseMatches` base subj
+  concat <$> for bsubs \bsub -> do
     nsub <- mostGeneralSubst bsub
-    nsubs <- zipWithM nfMatches (exponent (nfSubst nsub p)) (exponent s)
+    nsubs <- zipWithM nfMatches (exponent (nfSubst nsub pat)) (exponent subj)
 
     let nsubs' = map (`nfSubstCompose` nsub) $ mapMaybe unionsNoConflict $ sequence nsubs
 
@@ -256,19 +250,21 @@ prettyTy p = \case
   a `Prod` b -> showParen (p > 5) $ prettyTy 6 a . showString " * " . prettyTy 5 b
   a `Arr` b -> showParen (p > 4) $ prettyTy 5 a . showString " -> " . prettyTy 4 b
 
+enclose :: ShowS -> ShowS -> ShowS -> ShowS
+enclose l r x = l . x . r
+
+punctuate :: ShowS -> [ShowS] -> ShowS
+punctuate sep = \case
+  [] -> id
+  [x] -> x
+  (x : xs) -> x . foldr (\y acc -> sep . y . acc) id xs
+
 prettySubst :: Subst -> ShowS
-prettySubst sub = case M.minViewWithKey sub of
-  Nothing -> showString "{}"
-  Just ((x, t), rest) ->
-    showChar '{'
-      . showString (T.unpack x)
-      . showString " := "
-      . prettyTy 0 t
-      . M.foldrWithKey
-        (\x' t' acc -> showString ", " . showString (T.unpack x') . showString " := " . prettyTy 0 t' . acc)
-        id
-        rest
-      . showChar '}'
+prettySubst sub =
+  M.toList sub
+    & map (\(x, t) -> showString (T.unpack x) . showString " ← " . prettyTy 0 t)
+    & punctuate (showString ", ")
+    & enclose (showChar '{') (showChar '}')
 
 --------------------------------------------------------------------------------
 -- Parsing
