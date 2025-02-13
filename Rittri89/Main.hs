@@ -5,7 +5,8 @@ import Control.Monad
 import Data.Char
 import Data.Function
 import Data.List (permutations)
-import Data.Maybe
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as M
 import Data.MultiSet (MultiSet)
 import Data.MultiSet qualified as MS
 import Data.Set (Set)
@@ -32,109 +33,122 @@ infixr 4 `Arr`
 type Name = Text
 
 data Ty
-  = Var Name
-  | Unit
-  | Ty `Prod` Ty
-  | Ty `Arr` Ty
-  | List Ty
+  = Var Name -- x
+  | Unit -- ()
+  | Ty `Prod` Ty -- t * u
+  | Ty `Arr` Ty -- t -> u
+  | List Ty -- [t]
   deriving stock (Show)
 
 instance IsString Ty where
   fromString x = Var (fromString x)
 
---------------------------------------------------------------------------------
--- Normal form of types
+varSet :: Ty -> Set Name
+varSet = \case
+  Var x -> S.singleton x
+  Unit -> S.empty
+  a `Prod` b -> varSet a <> varSet b
+  a `Arr` b -> varSet a <> varSet b
+  List a -> varSet a
 
-infix 4 `NFArr`
+type Rename = Map Name Name
+
+possibleRenamings :: Ty -> Ty -> [Rename]
+possibleRenamings a b = do
+  let avars = S.toList $ varSet a
+      bvars = S.toList $ varSet b
+  guard $ length avars == length bvars
+  M.fromList . flip zip avars <$> permutations bvars
+
+rename :: Rename -> Ty -> Ty
+rename r = \case
+  Var x -> Var $ r M.! x
+  Unit -> Unit
+  a `Prod` b -> rename r a `Prod` rename r b
+  a `Arr` b -> rename r a `Arr` rename r b
+  List a -> List $ rename r a
+
+--------------------------------------------------------------------------------
+-- Main algorithm
+
+-- To make search results insensitive to currying/uncurrying and argument order,
+-- we define type equivalence using the following axioms (Rittri, 1989):
+--   1.         a * b = b * a
+--   2.   a * (b * c) = (a * b) * c
+--   3.   a -> b -> c = (a * b) -> c
+--   4.  a -> (b * c) = (a -> b) * (a -> c)
+--   5.        () * a = a
+--   6.       () -> a = a
+--   7.       a -> () = ()
+--
+-- The algorithm proceeds in two steps:
+--   i. Rewrite types by applying axioms (3-7):
+--      - Push products in return types of functions outward
+--      - Uncurry functions as much as possible
+--      - Eliminate unit types
+--   ii. Compare types recursively by multiset equality (axiom 1-2):
+--      - For function types: compare their argument types as multisets and their return types
+--      - For product types: compare their components as multisets
+--      - For list types: compare their element types
+--
+-- Example: Comparing (a -> b -> b) -> b -> [a] -> b and (b * a -> b) * [a] -> b -> b
+--   i. (a -> b -> b) -> b -> [a] -> b ~> (a * b -> b) * b * [a] -> b
+--      (b * a -> b) * b -> [a] -> b   ~> (b * a -> b) * [a] * b -> b
+--   ii. The comparison proceeds recursively:
+--      1. Compare the multisets of top-level factors:
+--         {(a * b -> b), b, [a]} and {(b * a -> b), [a], b}
+--      2. For function factors (a * b -> b) and (b * a -> b):
+--         - Their argument types a * b and b * a are equal as multisets
+--         - Their return types b and b are equal
+--      3. For list factors [a] and [a]: their element types are equal
+--      4. For atomic factors b and b: they are equal
+--      Therefore, the types are equivalent.
+--
+-- NF is the normal form of a type, which is the result of the step i above.
+-- It is defined as the multiset of factors so the derived Eq instance will perform the step ii above.
+
+infix 4 `FArr`
+
+infixr 4 `nfArr`
 
 data Atom
   = AVar Name
   | AList NF
   deriving stock (Show, Eq, Ord)
 
-data Factor = NF `NFArr` Atom
+data Factor = NF `FArr` Atom
   deriving stock (Show, Eq, Ord)
 
 type NF = MultiSet Factor
 
---------------------------------------------------------------------------------
--- Main algorithm
+-- It is possible to directly reduce the types to NF!
 
-{-
+nfAtom :: Atom -> NF
+nfAtom a = MS.singleton (mempty `FArr` a)
 
-Original code from the paper:
+-- x ~ () -> x
+nfVar :: Name -> NF
+nfVar x = nfAtom (AVar x)
 
-red :: Ty -> Ty
-red (Var x) = Var x
-red Unit = Unit
-red (a :* b) = case (red a, red b) of
-  (Unit, b) -> b
-  (a, Unit) -> a
-  (a, b) -> a :* b
-red (a :-> b) = case (red a, red b) of
-  (Unit, a) -> a
-  (a, b :-> c) -> (a :* b) :-> c
-  (_, Unit) -> Unit
-  (a, b :* c) -> red (a :-> b) :* red (a :-> c)
-  (a, b) -> a :-> b
-red (List a) = List (red a)
+-- [t] ~ () -> [t]
+nfList :: NF -> NF
+nfList a = nfAtom (AList a)
 
-chtype :: Ty -> NF
-chtype (Var x) = MS.singleton (mempty :=> x)
-chtype (x :-> Var y) = MS.singleton (chtype x :=> y)
-chtype (_ :-> _) = error "not normal"
-chtype Unit = mempty
-chtype (a :* b) = chtype a <> chtype b
-chtype (List a) = undefined
+nfArr' :: NF -> Factor -> Factor
+nfArr' a (e `FArr` b) = (a <> e) `FArr` b
 
-equiv :: Ty -> Ty -> Bool
-equiv a b = chtype (red a) == chtype (red b)
-
--}
-
-tyvars :: Ty -> Set Name
-tyvars = \case
-  Var x -> S.singleton x
-  Unit -> S.empty
-  a `Prod` b -> tyvars a <> tyvars b
-  a `Arr` b -> tyvars a <> tyvars b
-  List a -> tyvars a
-
-possibleRenamings :: Ty -> Ty -> [[(Name, Name)]]
-possibleRenamings a b = do
-  let avars = S.toList $ tyvars a
-      bvars = S.toList $ tyvars b
-  guard $ length avars == length bvars
-  flip zip avars <$> permutations bvars
-
-rename :: [(Name, Name)] -> Ty -> Ty
-rename r = \case
-  Var x -> Var $ fromJust $ lookup x r
-  Unit -> Unit
-  a `Prod` b -> rename r a `Prod` rename r b
-  a `Arr` b -> rename r a `Arr` rename r b
-  List a -> List $ rename r a
-
-atom :: Atom -> NF
-atom a = MS.singleton (mempty `NFArr` a)
-
-var :: Name -> NF
-var x = atom (AVar x)
-
-list :: NF -> NF
-list a = atom (AList a)
-
-(-->) :: NF -> NF -> NF
-(-->) a = MS.map (\(b `NFArr` x) -> (a <> b) `NFArr` x)
+nfArr :: NF -> NF -> NF
+nfArr a b = MS.map (nfArr' a) b
 
 reduce :: Ty -> NF
 reduce = \case
-  Var x -> var x
+  Var x -> nfVar x
   Unit -> mempty
   a `Prod` b -> reduce a <> reduce b
-  a `Arr` b -> reduce a --> reduce b
-  List a -> list (reduce a)
+  a `Arr` b -> reduce a `nfArr` reduce b
+  List a -> nfList (reduce a)
 
+-- Entrypoint: check if two types are equivalent in the normal form (modulo α-equivalence)
 equiv :: Ty -> Ty -> Bool
 equiv a b =
   let a' = reduce a
