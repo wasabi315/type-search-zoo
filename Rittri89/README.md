@@ -1,10 +1,10 @@
 # Rittri89
 
-- Insensitive to currying/uncurrying and the order of arguments.
+- Insensitive to currying/uncurrying and the argument order
 - Associative and commutative products with identity.
 
 ```text
-> (b * a -> b) -> [a] * b -> b
+> (x * y -> y) -> [x] -> y -> y
 foldr : (a -> b -> b) -> b -> [a] -> b
 foldl : (b -> a -> b) -> b -> [a] -> b
 ```
