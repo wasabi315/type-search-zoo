@@ -312,11 +312,11 @@ equivMatchingDisjSys :: Matching NF -> MatchingDisjSys NF
 equivMatchingDisjSys = \(pat, subj) -> do
   let subj' = MS.toList subj
   pat' <- permutations (MS.toList pat)
-  Just ss <- pure $ concatZipWithM go pat' subj'
-  pure ss
+  Just sys <- pure $ concatZipWithM go pat' subj'
+  pure sys
   where
     go = \cases
-      -- The function symbol should match
+      -- Type constructor should match
       (a `FArr` AConst c as) (a' `FArr` AConst c' as')
         | c == c' -> Just $ (a, a') : zip as as'
       _ _ -> Nothing
