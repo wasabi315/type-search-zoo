@@ -5,15 +5,15 @@
 - Able to match types more general than the query type
 
 ```text
-> a * b -> a
+> x -> y -> x
 const : a -> b -> a
-  by instantiating {a := a, b := b}
+  by instantiating {a ← x, b ← y}
 
 fst : a * b -> a
-  by instantiating {a := a, b := b}
+  by instantiating {a ← x, b ← y}
 
 bimap : (a -> b) -> (c -> d) -> a * c -> b * d
-  by instantiating {a := b, b := (), c := (), d := a}
+  by instantiating {a ← y, b ← (), c ← (), d ← x}
 ```
 
 `stack run -- signatures.txt` to run.

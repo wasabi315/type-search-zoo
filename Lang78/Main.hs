@@ -52,6 +52,37 @@ unionNoConflict =
 unionsNoConflict :: (Ord k, Eq a, Foldable t) => t (Map k a) -> Maybe (Map k a)
 unionsNoConflict = foldlM unionNoConflict M.empty
 
+concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
+concatMapM f xs = concat <$> traverse f xs
+
+--------------------------------------------------------------------------------
+-- Matching problem vocabulary from Rittri 1990.
+
+-- | A matching problem is a pair of two terms: a pattern and a subject.
+-- We seek the set of all substitutions that make the pattern and subject equal.
+type Matching t = (t, t)
+
+-- | A matching system is a set of matching problems.
+-- We seek the set of all substitutions that is the solution to *all* the matching problems in the system.
+type MatchingSys t = [Matching t]
+
+-- | A substitution is a mapping from names to terms.
+type Subst t = Map Name t
+
+-- Lift a algorithm for a matching problem to one for a matching system
+liftForMatchingSys ::
+  (Monad m, Eq t) =>
+  (Matching t -> m [Subst t]) ->
+  (MatchingSys t -> m [Subst t])
+liftForMatchingSys alg sys =
+  foldM
+    ( \accSubsts problem -> do
+        substs <- alg problem
+        pure $ catMaybes $ liftA2 unionNoConflict accSubsts substs
+    )
+    [mempty] -- empty substitution
+    sys
+
 --------------------------------------------------------------------------------
 -- Types
 
@@ -100,10 +131,9 @@ freezeVars = \case
   a `Prod` b -> freezeVars a `Prod` freezeVars b
   a `Arr` b -> freezeVars a `Arr` freezeVars b
 
-type Subst = Map Name Ty
-
 --------------------------------------------------------------------------------
 -- Normal form of types
+-- Unlike the NF in the Rittri89, we use lists instead of multisets because the product type here is not commutative.
 
 infixr 5 `nfProd`
 
@@ -177,21 +207,19 @@ unreduce = \case
 
 -- Substitution for NF
 
-type NFSubst = Map Name NF
-
-nfSubstAtom :: NFSubst -> Atom -> NF
+nfSubstAtom :: Subst NF -> Atom -> NF
 nfSubstAtom sub = \case
   a@(AVar x) -> fromMaybe (nfAtom a) (sub M.!? x)
   a -> nfAtom a
 
-nfSubstFactor :: NFSubst -> Factor -> NF
+nfSubstFactor :: Subst NF -> Factor -> NF
 nfSubstFactor sub (e `FArr` b) = nfSubst sub e `nfArr` nfSubstAtom sub b
 
-nfSubst :: NFSubst -> NF -> NF
-nfSubst sub a = concatMap (nfSubstFactor sub) a
+nfSubst :: Subst NF -> NF -> NF
+nfSubst subst a = concatMap (nfSubstFactor subst) a
 
-nfSubstCompose :: NFSubst -> NFSubst -> NFSubst
-nfSubstCompose a b = M.map (nfSubst a) b <> a
+nfSubstCompose :: Subst NF -> Subst NF -> Subst NF
+nfSubstCompose subst2 subst1 = M.map (nfSubst subst2) subst1 <> subst2
 
 --------------------------------------------------------------------------------
 -- Exponent and base of a NF
@@ -206,34 +234,33 @@ exponent a = map (\(e `FArr` _) -> e) a
 base :: NF -> Base
 base a = map (\(_ `FArr` b) -> b) a
 
--- Substitution for Base
-type BSubst = Map Name Base
-
 --------------------------------------------------------------------------------
 
-infix 4 `baseMatches`
-
-infix 4 `nfMatches`
-
--- Associative matching of two bases
+-- | A brute-force associative-unit matching algorithm
 -- Assumes the subject does not contain any type variables
-baseMatches :: Base -> Base -> [BSubst]
-baseMatches = go M.empty
+auMatch :: Matching Base -> [Subst Base]
+auMatch = \(pat, subj) -> go M.empty pat subj
   where
-    go sub = \cases
-      [] [] -> pure sub
+    go subst = \cases
+      -- Matching is done successfully so we return the substitution accumulated so far
+      [] [] -> pure subst
+      -- Matching is not possible so fail
       [] (_ : _) -> empty
       (AVar v : p) s -> do
+        -- Try all possible ways of splitting the subject and assign the first part to the variable
         (s', s'') <- zip (inits s) (tails s)
-        sub' <- maybeToList $ insertNoConflict v s' sub
-        go sub' p s''
+        Just subst' <- pure $ insertNoConflict v s' subst
+        -- Recursively match the rest of the pattern and subject
+        go subst' p s''
       (AConst _ : _) [] -> empty
       (AConst _ : _) (AVar _ : _) -> error "Type variable in subject"
       (AConst c : p) (AConst c' : s)
-        | c == c' -> go sub p s
+        -- If the constants match, continue matching the rest of the pattern and subject
+        | c == c' -> go subst p s
+        -- If the constants do not match, matching fails
         | otherwise -> empty
 
--- Returns the most general type that has the given base
+-- | Returns the most general type that has the given base
 mostGeneral :: Base -> IO NF
 mostGeneral b =
   traverse
@@ -243,22 +270,23 @@ mostGeneral b =
     )
     b
 
-mostGeneralSubst :: BSubst -> IO NFSubst
+mostGeneralSubst :: Subst Base -> IO (Subst NF)
 mostGeneralSubst bsub = traverse mostGeneral bsub
 
--- Entrypoint: tries to match a pattern against a subject and returns all possible substitutions
--- Assumes the subject does not contain any type variables
-nfMatches :: NF -> NF -> IO [NFSubst]
-nfMatches pat subj = do
-  let bsubs = base pat `baseMatches` base subj
-      expSubj = exponent subj
-  concat <$> for bsubs \bsub -> do
-    nsub <- mostGeneralSubst bsub
-    nsubs <- zipWithM nfMatches (exponent (nfSubst nsub pat)) expSubj
+-- | Entrypoint: match a pattern with a subject and return all possible substitutions.
+-- Assumes the subject does not contain any type variables.
+nfMatches :: Matching NF -> IO [Subst NF]
+nfMatches (pat, subj) = do
+  let bsubsts = auMatch (base pat, base subj)
+  nsubsts <- traverse mostGeneralSubst bsubsts
+  flip concatMapM nsubsts \nsubst -> do
+    nsubsts' <- liftForMatchingSys nfMatches (equivMatchingSys (nfSubst nsubst pat, subj))
+    pure $ map (`nfSubstCompose` nsubst) nsubsts'
 
-    let nsubs' = map (`nfSubstCompose` nsub) $ mapMaybe unionsNoConflict $ sequence nsubs
-
-    pure nsubs'
+-- | Extract a matching system that is equivalent to the given matching problem.
+-- Assumes the pattern and subject have a common base.
+equivMatchingSys :: Matching NF -> MatchingSys NF
+equivMatchingSys (pat, subj) = zip (exponent pat) (exponent subj)
 
 --------------------------------------------------------------------------------
 -- Pretty printing
@@ -277,7 +305,7 @@ enclose l r x = l . x . r
 punctuate :: ShowS -> [ShowS] -> ShowS
 punctuate sep xs = foldr (.) id (intersperse sep xs)
 
-prettySubst :: Subst -> ShowS
+prettySubst :: Subst Ty -> ShowS
 prettySubst sub =
   M.toList sub
     & map (\(x, t) -> shows x . showString " ← " . prettyTy 0 t)
@@ -306,13 +334,13 @@ brackets = between (symbol "[") (symbol "]")
 
 pFunName :: Parser Text
 pFunName = lexeme do
-  n <- takeWhile1P (Just "fun") isAlphaNum
+  n <- takeWhile1P (Just "function name") isAlphaNum
   guard $ isLower (T.head n)
   pure n
 
 pVarOrConst :: Parser Ty
 pVarOrConst = lexeme do
-  n <- takeWhile1P (Just "var or const") isAlphaNum
+  n <- takeWhile1P (Just "type variable or type constant") isAlphaNum
   if
     | isLower (T.head n) -> pure (Var (Name n))
     | isUpper (T.head n) -> pure (Const (Name n))
@@ -350,7 +378,7 @@ doSearch sigs input = case parseTy (T.pack input) of
   Right query -> do
     let nfQuery = reduce $ freezeVars query
     forM_ sigs \(x, sig, nfSig) -> do
-      matches <- liftIO $ nfSig `nfMatches` nfQuery
+      matches <- liftIO $ nfMatches (nfSig, nfQuery)
       case matches of
         [] -> pure ()
         sub : _ -> do
