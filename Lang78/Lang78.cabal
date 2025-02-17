@@ -52,7 +52,7 @@ executable Lang78
       ScopedTypeVariables
       StandaloneDeriving
       StandaloneKindSignatures
-      StrictData
+      Strict
       TemplateHaskell
       TypeApplications
       TypeFamilies
@@ -63,8 +63,7 @@ executable Lang78
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-deriving-strategies -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -funbox-strict-fields
   build-depends:
-      QuickCheck
-    , base >=4.7 && <5
+      base >=4.7 && <5
     , containers
     , haskeline
     , megaparsec

@@ -6,14 +6,12 @@ import Control.Monad.IO.Class
 import Data.Char
 import Data.Foldable
 import Data.Function
-import Data.List (inits, tails)
+import Data.List (inits, intersperse, tails)
 import Data.Map.Merge.Strict qualified as M
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Monoid
-import Data.Set (Set)
-import Data.Set qualified as S
 import Data.String
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -61,20 +59,39 @@ infixr 5 `Prod`
 
 infixr 4 `Arr`
 
-type Name = Text
+data Name
+  = Name Text
+  | Gen Unique -- Generated name
+  deriving stock (Eq, Ord)
+
+instance IsString Name where
+  fromString s = Name (T.pack s)
+
+instance Show Name where
+  show = \case
+    Name t -> T.unpack t
+    Gen u -> "$" <> show (hashUnique u)
+
+genName :: IO Name
+genName = Gen <$> newUnique
+
+isGen :: Name -> Bool
+isGen = \case
+  Gen _ -> True
+  Name _ -> False
 
 data Ty
-  = Var Name -- a
-  | Const Name -- C (e.g. Int)
+  = Var Name -- x
+  | Const Name -- C (e.g. Int, Bool)
   | Unit -- ()
-  | Ty `Prod` Ty -- t * t
-  | Ty `Arr` Ty -- t -> t
+  | Ty `Prod` Ty -- t * u
+  | Ty `Arr` Ty -- t -> u
   deriving stock (Eq, Ord, Show)
 
 instance IsString Ty where
-  fromString x = Var (T.pack x)
+  fromString x = Var (fromString x)
 
--- | Change all variables to constants.
+-- | Converts all type variables to type constants.
 freezeVars :: Ty -> Ty
 freezeVars = \case
   Var x -> Const x
@@ -82,15 +99,6 @@ freezeVars = \case
   Unit -> Unit
   a `Prod` b -> freezeVars a `Prod` freezeVars b
   a `Arr` b -> freezeVars a `Arr` freezeVars b
-
--- | The set of variables in a type.
-varSet :: Ty -> Set Name
-varSet = \case
-  Var x -> S.singleton x
-  Const _ -> mempty
-  Unit -> mempty
-  a `Prod` b -> varSet a <> varSet b
-  a `Arr` b -> varSet a <> varSet b
 
 type Subst = Map Name Ty
 
@@ -113,8 +121,9 @@ data Factor = NF `FArr` Atom
 
 type NF = [Factor]
 
+-- a ~ () -> a
 nfAtom :: Atom -> NF
-nfAtom a = [mempty `FArr` a]
+nfAtom a = [nfUnit `FArr` a]
 
 nfVar :: Name -> NF
 nfVar v = nfAtom (AVar v)
@@ -122,22 +131,34 @@ nfVar v = nfAtom (AVar v)
 nfConst :: Name -> NF
 nfConst c = nfAtom (AConst c)
 
+nfUnit :: NF
+nfUnit = []
+
+-- a * (b * c) ~ (a * b) * c
+-- a * () ~ a
+-- () * a ~ a
 nfProd :: NF -> NF -> NF
 a `nfProd` b = a <> b
 
+-- a -> (e -> b) ~ (a * e) -> b
 nfArr' :: NF -> Factor -> Factor
-nfArr' a (e `FArr` b) = (a `nfProd` e) `FArr` b
+a `nfArr'` (e `FArr` b) = (a `nfProd` e) `FArr` b
 
+-- a -> (b1 * b2 * ... * bn) ~ (a -> b1) * (a -> b2) * ... * (a -> bn)
+-- a -> () ~ ()
 nfArr :: NF -> NF -> NF
 a `nfArr` b = map (nfArr' a) b
 
+-- Reduce a type to its normal form
 reduce :: Ty -> NF
 reduce = \case
   Var x -> nfVar x
   Const c -> nfConst c
-  Unit -> mempty
+  Unit -> nfUnit
   a `Prod` b -> reduce a `nfProd` reduce b
   a `Arr` b -> reduce a `nfArr` reduce b
+
+-- Convert a normal form to a type
 
 unreduceAtom :: Atom -> Ty
 unreduceAtom = \case
@@ -158,15 +179,16 @@ unreduce = \case
 
 type NFSubst = Map Name NF
 
-nfSubst' :: NFSubst -> Factor -> NF
-nfSubst' sub (e `FArr` b) = case b of
-  AVar x | Just a <- M.lookup x sub -> e' `nfArr` a
-  _ -> [e' `FArr` b]
-  where
-    e' = nfSubst sub e
+nfSubstAtom :: NFSubst -> Atom -> NF
+nfSubstAtom sub = \case
+  a@(AVar x) -> fromMaybe (nfAtom a) (sub M.!? x)
+  a -> nfAtom a
+
+nfSubstFactor :: NFSubst -> Factor -> NF
+nfSubstFactor sub (e `FArr` b) = nfSubst sub e `nfArr` nfSubstAtom sub b
 
 nfSubst :: NFSubst -> NF -> NF
-nfSubst sub = concatMap (nfSubst' sub)
+nfSubst sub a = concatMap (nfSubstFactor sub) a
 
 nfSubstCompose :: NFSubst -> NFSubst -> NFSubst
 nfSubstCompose a b = M.map (nfSubst a) b <> a
@@ -179,10 +201,10 @@ type Exponent = [NF]
 type Base = [Atom]
 
 exponent :: NF -> Exponent
-exponent = map (\(e `FArr` _) -> e)
+exponent a = map (\(e `FArr` _) -> e) a
 
 base :: NF -> Base
-base = map (\(_ `FArr` b) -> b)
+base a = map (\(_ `FArr` b) -> b) a
 
 -- Substitution for Base
 type BSubst = Map Name Base
@@ -193,47 +215,46 @@ infix 4 `baseMatches`
 
 infix 4 `nfMatches`
 
--- Given p and s, returns a list of BSubsts such that each BSubst ω satisfies bsubst ω p = s
+-- Associative matching of two bases
+-- Assumes the subject does not contain any type variables
 baseMatches :: Base -> Base -> [BSubst]
-baseMatches = \cases
-  [] [] -> pure M.empty
-  [] (_ : _) -> empty
-  (AVar v : p) s -> do
-    (s', s'') <- zip (inits s) (tails s)
-    mapMaybe (insertNoConflict v s') $ baseMatches p s''
-  (AConst _ : _) [] -> empty
-  (AConst _ : _) (AVar _ : _) -> empty
-  (AConst c : p) (AConst c' : s)
-    | c == c' -> baseMatches p s
-    | otherwise -> empty
-
-genName :: IO Name
-genName = do
-  u <- newUnique
-  pure $ "$v" <> T.pack (show $ hashUnique u)
+baseMatches = go M.empty
+  where
+    go sub = \cases
+      [] [] -> pure sub
+      [] (_ : _) -> empty
+      (AVar v : p) s -> do
+        (s', s'') <- zip (inits s) (tails s)
+        sub' <- maybeToList $ insertNoConflict v s' sub
+        go sub' p s''
+      (AConst _ : _) [] -> empty
+      (AConst _ : _) (AVar _ : _) -> error "Type variable in subject"
+      (AConst c : p) (AConst c' : s)
+        | c == c' -> go sub p s
+        | otherwise -> empty
 
 -- Returns the most general type that has the given base
 mostGeneral :: Base -> IO NF
-mostGeneral =
+mostGeneral b =
   traverse
-    \case
-      AVar x -> do
+    ( \a -> do
         y <- genName
-        pure $ nfVar y `FArr` AVar x
-      AConst c -> do
-        y <- genName
-        pure $ nfVar y `FArr` AConst c
+        pure $ nfVar y `FArr` a
+    )
+    b
 
 mostGeneralSubst :: BSubst -> IO NFSubst
-mostGeneralSubst = traverse mostGeneral
+mostGeneralSubst bsub = traverse mostGeneral bsub
 
--- Given a pattern and a subject, returns a list of NFSubsts such that each NSubst σ satisfies nfSubst σ pat = subj
+-- Entrypoint: tries to match a pattern against a subject and returns all possible substitutions
+-- Assumes the subject does not contain any type variables
 nfMatches :: NF -> NF -> IO [NFSubst]
 nfMatches pat subj = do
   let bsubs = base pat `baseMatches` base subj
+      expSubj = exponent subj
   concat <$> for bsubs \bsub -> do
     nsub <- mostGeneralSubst bsub
-    nsubs <- zipWithM nfMatches (exponent (nfSubst nsub pat)) (exponent subj)
+    nsubs <- zipWithM nfMatches (exponent (nfSubst nsub pat)) expSubj
 
     let nsubs' = map (`nfSubstCompose` nsub) $ mapMaybe unionsNoConflict $ sequence nsubs
 
@@ -244,8 +265,8 @@ nfMatches pat subj = do
 
 prettyTy :: Int -> Ty -> ShowS
 prettyTy p = \case
-  Var v -> showString (T.unpack v)
-  Const c -> showString (T.unpack c)
+  Var v -> shows v
+  Const c -> shows c
   Unit -> showString "()"
   a `Prod` b -> showParen (p > 5) $ prettyTy 6 a . showString " * " . prettyTy 5 b
   a `Arr` b -> showParen (p > 4) $ prettyTy 5 a . showString " -> " . prettyTy 4 b
@@ -254,15 +275,12 @@ enclose :: ShowS -> ShowS -> ShowS -> ShowS
 enclose l r x = l . x . r
 
 punctuate :: ShowS -> [ShowS] -> ShowS
-punctuate sep = \case
-  [] -> id
-  [x] -> x
-  (x : xs) -> x . foldr (\y acc -> sep . y . acc) id xs
+punctuate sep xs = foldr (.) id (intersperse sep xs)
 
 prettySubst :: Subst -> ShowS
 prettySubst sub =
   M.toList sub
-    & map (\(x, t) -> showString (T.unpack x) . showString " ← " . prettyTy 0 t)
+    & map (\(x, t) -> shows x . showString " ← " . prettyTy 0 t)
     & punctuate (showString ", ")
     & enclose (showChar '{') (showChar '}')
 
@@ -286,7 +304,7 @@ parens = between (symbol "(") (symbol ")")
 brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
 
-pFunName :: Parser Name
+pFunName :: Parser Text
 pFunName = lexeme do
   n <- takeWhile1P (Just "fun") isAlphaNum
   guard $ isLower (T.head n)
@@ -296,8 +314,8 @@ pVarOrConst :: Parser Ty
 pVarOrConst = lexeme do
   n <- takeWhile1P (Just "var or const") isAlphaNum
   if
-    | isLower (T.head n) -> pure (Var n)
-    | isUpper (T.head n) -> pure (Const n)
+    | isLower (T.head n) -> pure (Var (Name n))
+    | isUpper (T.head n) -> pure (Const (Name n))
     | otherwise -> empty
 
 pAtom :: Parser Ty
@@ -315,18 +333,18 @@ pTy = foldr1 Arr <$> pProd `sepBy1` symbol "->"
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
 parseTy = parse (pTy <* eof) ""
 
-parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Ty)]
+parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Text, Ty)]
 parseSigs path = flip parse path $ many ((,) <$> pFunName <*> (symbol ":" *> pTy)) <* eof
 
 --------------------------------------------------------------------------------
 
 orDie :: (Exception e) => Either e a -> IO a
-orDie = either (\e -> putStrLn (displayException e) >> exitFailure) pure
+orDie = either (die . displayException) pure
 
 helpText :: String
 helpText = "Enter a type to query, :q to quit, or :h for help.\n\nType syntax:\n  <var>   ::= [a-z][a-zA-Z0-9]\n  <const> ::= [A-Z][a-zA-Z0-9]\n  <type>  ::= <var> | <const> | () | <type> * <type> | <type> -> <type>\n"
 
-doSearch :: [(Name, Ty, NF)] -> String -> InputT IO ()
+doSearch :: [(Text, Ty, NF)] -> String -> InputT IO ()
 doSearch sigs input = case parseTy (T.pack input) of
   Left err -> outputStrLn (displayException err)
   Right query -> do
@@ -335,9 +353,8 @@ doSearch sigs input = case parseTy (T.pack input) of
       matches <- liftIO $ nfSig `nfMatches` nfQuery
       case matches of
         [] -> pure ()
-        (sub : _) -> do
-          let vs = varSet sig
-              sub' = unreduce <$> M.restrictKeys sub vs
+        sub : _ -> do
+          let sub' = unreduce <$> M.filterWithKey (\k _ -> not $ isGen k) sub
           outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 sig ""
           outputStrLn $ "  by instantiating " ++ prettySubst sub' "\n"
 

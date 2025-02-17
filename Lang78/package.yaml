@@ -39,7 +39,7 @@ default-extensions:
   - ScopedTypeVariables
   - StandaloneDeriving
   - StandaloneKindSignatures
-  - StrictData
+  - Strict
   - TemplateHaskell
   - TypeApplications
   - TypeFamilies
@@ -56,7 +56,6 @@ dependencies:
   - megaparsec
   - multiset
   - text
-  - QuickCheck
 
 ghc-options:
   - -Wall
