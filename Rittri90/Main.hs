@@ -48,7 +48,7 @@ concatZipWithM :: (Applicative m) => (a -> b -> m [c]) -> [a] -> [b] -> m [c]
 concatZipWithM f xs ys = concat <$> zipWithM f xs ys
 
 --------------------------------------------------------------------------------
--- Matching problems
+-- Matching problem vocabulary from Rittri 1990.
 
 -- | A matching problem is a pair of two terms: a pattern and a subject.
 -- We seek the set of all substitutions that make the pattern and subject equal.
@@ -226,7 +226,7 @@ nfSubst :: Subst NF -> NF -> NF
 nfSubst sub = MS.unionsMap (nfSubstFactor sub)
 
 nfSubstCompose :: Subst NF -> Subst NF -> Subst NF
-nfSubstCompose a b = M.map (nfSubst a) b <> a
+nfSubstCompose subst2 subst1 = M.map (nfSubst subst2) subst1 <> subst2
 
 --------------------------------------------------------------------------------
 -- Base of a NF
