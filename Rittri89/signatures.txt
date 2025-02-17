@@ -23,6 +23,6 @@ snd : a * b -> b
 curry : (a * b -> c) -> (a -> b -> c)
 uncurry : (a -> b -> c) -> (a * b -> c)
 swap : a * b -> b * a
-bimapPair : (a -> b) -> (c -> d) -> (a * c) -> (b * d)
+bimap : (a -> b) -> (c -> d) -> (a * c) -> (b * d)
 diag : a -> a * a
-duplicatePair : e * a -> e * (e * a)
+duplicate : e * a -> e * (e * a)

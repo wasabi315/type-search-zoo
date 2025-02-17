@@ -41,7 +41,7 @@ data Ty
   deriving stock (Show)
 
 instance IsString Ty where
-  fromString x = Var (fromString x)
+  fromString x = Var (T.pack x)
 
 varSet :: Ty -> Set Name
 varSet = \case
@@ -71,8 +71,8 @@ rename r = \case
 --------------------------------------------------------------------------------
 -- Main algorithm
 
--- To make search results insensitive to currying/uncurrying and argument order,
--- we define type equivalence using the following axioms (Rittri, 1989):
+-- To make search insensitive to currying/uncurrying and argument order,
+-- we adopt the following type isomorphisms as axioms:
 --   1.         a * b = b * a
 --   2.   a * (b * c) = (a * b) * c
 --   3.   a -> b -> c = (a * b) -> c
@@ -82,32 +82,18 @@ rename r = \case
 --   7.       a -> () = ()
 --
 -- The algorithm proceeds in two steps:
---   i. Rewrite types by applying axioms (3-7):
---      - Push products in return types of functions outward
---      - Uncurry functions as much as possible
---      - Eliminate unit types
---   ii. Compare types recursively by multiset equality (axiom 1-2):
---      - For function types: compare their argument types as multisets and their return types
---      - For product types: compare their components as multisets
---      - For list types: compare their element types
+--   i.  Rewrite types by applying axioms (3) to (7):
+--   ii. Compare types by multiset equality (axioms (1) and (2)):
 --
--- Example: Comparing (a -> b -> b) -> b -> [a] -> b and (b * a -> b) * [a] -> b -> b
---   i. (a -> b -> b) -> b -> [a] -> b ~> (a * b -> b) * b * [a] -> b
---      (b * a -> b) * b -> [a] -> b   ~> (b * a -> b) * [a] * b -> b
---   ii. The comparison proceeds recursively:
---      1. Compare the multisets of top-level factors:
---         {(a * b -> b), b, [a]} and {(b * a -> b), [a], b}
---      2. For function factors (a * b -> b) and (b * a -> b):
---         - Their argument types a * b and b * a are equal as multisets
---         - Their return types b and b are equal
---      3. For list factors [a] and [a]: their element types are equal
---      4. For atomic factors b and b: they are equal
---      Therefore, the types are equivalent.
---
--- NF is the normal form of a type, which is the result of the step i above.
--- It is defined as the multiset of factors so the derived Eq instance will perform the step ii above.
+-- The normal form @NF@ of a type is the result of step i.
+-- By the axioms, product types at return types of functions are pushed outward, arguments are uncurried, and unit types are eliminated, hence the shape.
+-- Step ii is automatic in this implementation because we use @MultiSet@ to represent @NF@!
+
+infixr 5 `nfProd`
 
 infix 4 `FArr`
+
+infix 4 `nfArr'`
 
 infixr 4 `nfArr`
 
@@ -116,39 +102,45 @@ data Atom
   | AList NF
   deriving stock (Show, Eq, Ord)
 
-data Factor = NF `FArr` Atom
+data Factor = NF `FArr` !Atom
   deriving stock (Show, Eq, Ord)
 
 type NF = MultiSet Factor
 
--- It is possible to directly reduce the types to NF!
+-- It is possible to directly reduce types into NF!
 
 nfAtom :: Atom -> NF
-nfAtom a = MS.singleton (mempty `FArr` a)
+nfAtom a = MS.singleton (nfUnit `FArr` a)
 
--- x ~ () -> x
 nfVar :: Name -> NF
 nfVar x = nfAtom (AVar x)
 
--- [t] ~ () -> [t]
 nfList :: NF -> NF
 nfList a = nfAtom (AList a)
 
-nfArr' :: NF -> Factor -> Factor
-nfArr' a (e `FArr` b) = (a <> e) `FArr` b
+nfUnit :: NF
+nfUnit = mempty
 
+nfProd :: NF -> NF -> NF
+a `nfProd` b = a <> b
+
+-- a -> (e -> b) ~ (a * e) -> b
+nfArr' :: NF -> Factor -> Factor
+a `nfArr'` (e `FArr` b) = (a <> e) `FArr` b
+
+-- a -> (b1 * b2 * ... * bn) ~ (a -> b1) * (a -> b2) * ... * (a -> bn)
 nfArr :: NF -> NF -> NF
-nfArr a b = MS.map (nfArr' a) b
+a `nfArr` b = MS.map (nfArr' a) b
 
 reduce :: Ty -> NF
 reduce = \case
   Var x -> nfVar x
-  Unit -> mempty
-  a `Prod` b -> reduce a <> reduce b
+  Unit -> nfUnit
+  a `Prod` b -> reduce a `nfProd` reduce b
   a `Arr` b -> reduce a `nfArr` reduce b
   List a -> nfList (reduce a)
 
--- Entrypoint: check if two types are equivalent in the normal form (modulo α-equivalence)
+-- Entrypoint: check if two types are equal modulo the axioms and α-equivalence
 equiv :: Ty -> Ty -> Bool
 equiv a b =
   let a' = reduce a
@@ -208,7 +200,7 @@ prettyTy p = \case
 --------------------------------------------------------------------------------
 
 orDie :: (Exception e) => Either e a -> IO a
-orDie = either (\e -> putStrLn (displayException e) >> exitFailure) pure
+orDie = either (die . displayException) pure
 
 helpText :: String
 helpText = "Enter a type to query, :q to quit, or :h for help.\nType syntax:\n  <var>  ::= [a-z][a-zA-Z0-9]\n  <type> ::= <var> | () | <type> * <type> | <type> -> <type> | [<type>]"
