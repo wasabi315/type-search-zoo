@@ -7,7 +7,6 @@ import Data.Char
 import Data.Foldable
 import Data.Function
 import Data.List (inits, intersperse, tails)
-import Data.Map.Merge.Strict qualified as M
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -40,18 +39,6 @@ insertNoConflict k v =
       _ -> Just (Just v)
     k
 
--- | Like @union@, but returns Nothing if the two maps have conflicting values.
-unionNoConflict :: (Ord k, Eq a) => Map k a -> Map k a -> Maybe (Map k a)
-unionNoConflict =
-  M.mergeA
-    M.preserveMissing
-    M.preserveMissing
-    (M.zipWithAMatched \_ x y -> if x == y then Just x else Nothing)
-
--- | Like @unions@, but returns Nothing if the maps have conflicting values.
-unionsNoConflict :: (Ord k, Eq a, Foldable t) => t (Map k a) -> Maybe (Map k a)
-unionsNoConflict = foldlM unionNoConflict M.empty
-
 concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat <$> traverse f xs
 
@@ -69,16 +56,22 @@ type MatchingSys t = [Matching t]
 -- | A substitution is a mapping from names to terms.
 type Subst t = Map Name t
 
+composeSubst :: (Subst t -> t -> t) -> Subst t -> Subst t -> Subst t
+composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
+
 -- Lift a algorithm for a matching problem to one for a matching system
 liftForMatchingSys ::
-  (Monad m, Eq t) =>
+  (Monad m) =>
+  (Subst t -> t -> t) ->
   (Matching t -> m [Subst t]) ->
   (MatchingSys t -> m [Subst t])
-liftForMatchingSys alg sys =
+liftForMatchingSys appSubst alg sys =
   foldM
-    ( \accSubsts problem -> do
-        substs <- alg problem
-        pure $ catMaybes $ liftA2 unionNoConflict accSubsts substs
+    ( \accSubsts (pat, subj) -> do
+        flip concatMapM accSubsts \accSubst -> do
+          let problem = (appSubst accSubst pat, subj)
+          substs <- alg problem
+          pure $ map (\subst -> composeSubst appSubst subst accSubst) substs
     )
     [mempty] -- empty substitution
     sys
@@ -218,9 +211,6 @@ nfSubstFactor sub (e `FArr` b) = nfSubst sub e `nfArr` nfSubstAtom sub b
 nfSubst :: Subst NF -> NF -> NF
 nfSubst subst a = concatMap (nfSubstFactor subst) a
 
-nfSubstCompose :: Subst NF -> Subst NF -> Subst NF
-nfSubstCompose subst2 subst1 = M.map (nfSubst subst2) subst1 <> subst2
-
 --------------------------------------------------------------------------------
 -- Exponent and base of a NF
 
@@ -280,8 +270,9 @@ nfMatches (pat, subj) = do
   let bsubsts = auMatch (base pat, base subj)
   nsubsts <- traverse mostGeneralSubst bsubsts
   flip concatMapM nsubsts \nsubst -> do
-    nsubsts' <- liftForMatchingSys nfMatches (equivMatchingSys (nfSubst nsubst pat, subj))
-    pure $ map (`nfSubstCompose` nsubst) nsubsts'
+    let pat' = nfSubst nsubst pat
+    nsubsts' <- liftForMatchingSys nfSubst nfMatches (equivMatchingSys (pat', subj))
+    pure $ map (\nsubst' -> composeSubst nfSubst nsubst' nsubst) nsubsts'
 
 -- | Extract a matching system that is equivalent to the given matching problem.
 -- Assumes the pattern and subject have a common base.

@@ -7,7 +7,6 @@ import Data.Char
 import Data.Foldable
 import Data.Function
 import Data.List (intersperse, permutations)
-import Data.Map.Merge.Strict qualified as M
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -33,14 +32,6 @@ import Prelude hiding (exponent)
 --------------------------------------------------------------------------------
 -- Utils
 
--- | Like @union@, but returns Nothing if the two maps have conflicting values.
-unionNoConflict :: (Ord k, Eq a) => Map k a -> Map k a -> Maybe (Map k a)
-unionNoConflict =
-  M.mergeA
-    M.preserveMissing
-    M.preserveMissing
-    (M.zipWithAMatched \_ x y -> if x == y then Just x else Nothing)
-
 concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat <$> traverse f xs
 
@@ -65,27 +56,34 @@ type MatchingDisjSys t = [MatchingSys t]
 -- | A substitution is a mapping from names to terms.
 type Subst t = Map Name t
 
+composeSubst :: (Subst t -> t -> t) -> Subst t -> Subst t -> Subst t
+composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
+
 -- Lift a algorithm for a matching problem to one for a matching system
 liftForMatchingSys ::
-  (Monad m, Eq t) =>
+  (Monad m) =>
+  (Subst t -> t -> t) ->
   (Matching t -> m [Subst t]) ->
   (MatchingSys t -> m [Subst t])
-liftForMatchingSys alg sys =
+liftForMatchingSys appSubst alg sys =
   foldM
-    ( \accSubsts problem -> do
-        substs <- alg problem
-        pure $ catMaybes $ liftA2 unionNoConflict accSubsts substs
+    ( \accSubsts (pat, subj) -> do
+        flip concatMapM accSubsts \accSubst -> do
+          let problem = (appSubst accSubst pat, subj)
+          substs <- alg problem
+          pure $ map (\subst -> composeSubst appSubst subst accSubst) substs
     )
     [mempty] -- empty substitution
     sys
 
 -- Lift a algorithm for a matching problem to one for a matching disjunction system
 liftForMatchingDisjSys ::
-  (Monad m, Eq t) =>
+  (Monad m) =>
+  (Subst t -> t -> t) ->
   (Matching t -> m [Subst t]) ->
   (MatchingDisjSys t -> m [Subst t])
-liftForMatchingDisjSys alg disjSys =
-  concatMapM (liftForMatchingSys alg) disjSys
+liftForMatchingDisjSys appSubst alg disjSys =
+  concatMapM (liftForMatchingSys appSubst alg) disjSys
 
 --------------------------------------------------------------------------------
 -- Types
@@ -225,9 +223,6 @@ nfSubstFactor sub (e `FArr` b) = nfSubst sub e `nfArr` nfSubstAtom sub b
 nfSubst :: Subst NF -> NF -> NF
 nfSubst sub = MS.unionsMap (nfSubstFactor sub)
 
-nfSubstCompose :: Subst NF -> Subst NF -> Subst NF
-nfSubstCompose subst2 subst1 = M.map (nfSubst subst2) subst1 <> subst2
-
 --------------------------------------------------------------------------------
 -- Base of a NF
 
@@ -302,9 +297,9 @@ nfMatches :: Matching NF -> IO [Subst NF]
 nfMatches (pat, subj) = do
   let bsubsts = acuMatch (base pat, base subj)
   nsubsts <- traverse mostGeneralSubst bsubsts
-  flip concatMapM nsubsts \nsub -> do
-    nsubsts' <- liftForMatchingDisjSys nfMatches (equivMatchingDisjSys (nfSubst nsub pat, subj))
-    pure $ map (`nfSubstCompose` nsub) nsubsts'
+  flip concatMapM nsubsts \nsubst -> do
+    nsubsts' <- liftForMatchingDisjSys nfSubst nfMatches (equivMatchingDisjSys (nfSubst nsubst pat, subj))
+    pure $ map (\nsubst' -> composeSubst nfSubst nsubst' nsubst) nsubsts'
 
 -- | Extract a matching disjunction system that is equivalent to the given matching problem.
 -- Assumes the pattern and subject have a common base.
