@@ -30,15 +30,6 @@ import Prelude hiding (exponent)
 --------------------------------------------------------------------------------
 -- Utils
 
--- | Like @insert@, but returns Nothing if the key already exists with a different value.
-insertNoConflict :: (Ord k, Eq a) => k -> a -> Map k a -> Maybe (Map k a)
-insertNoConflict k v =
-  M.alterF
-    \case
-      Just v' | v /= v' -> Nothing
-      _ -> Just (Just v)
-    k
-
 concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat <$> traverse f xs
 
@@ -214,6 +205,11 @@ nfSubst subst a = concatMap (nfSubstFactor subst) a
 --------------------------------------------------------------------------------
 -- Exponent and base of a NF
 
+-- Given a normal form (a1 -> b1) * (a2 -> b2) * ... * (an -> bn),
+-- the exponent is the sequence of normal forms [a1, a2, ..., an].
+-- The base is the sequence of atoms [b1, b2, ..., bn].
+-- We write 't B b' if the term t has the base b, following the paper.
+
 type Exponent = [NF]
 
 type Base = [Atom]
@@ -223,6 +219,14 @@ exponent a = map (\(e `FArr` _) -> e) a
 
 base :: NF -> Base
 base a = map (\(_ `FArr` b) -> b) a
+
+bsubst :: Subst Base -> Base -> Base
+bsubst subst b =
+  concatMap
+    \case
+      v@(AVar x) -> fromMaybe [v] (subst M.!? x)
+      c@(AConst _) -> [c]
+    b
 
 --------------------------------------------------------------------------------
 
@@ -239,9 +243,12 @@ auMatch = \(pat, subj) -> go M.empty pat subj
       (AVar v : p) s -> do
         -- Try all possible ways of splitting the subject and assign the first part to the variable
         (s', s'') <- zip (inits s) (tails s)
-        Just subst' <- pure $ insertNoConflict v s' subst
+        let -- New substitution
+            subst' = M.insert v s' subst
+            -- Apply the substitution to the rest of the pattern
+            p' = bsubst subst' p
         -- Recursively match the rest of the pattern and subject
-        go subst' p s''
+        go subst' p' s''
       (AConst _ : _) [] -> empty
       (AConst _ : _) (AVar _ : _) -> error "Type variable in subject"
       (AConst c : p) (AConst c' : s)
@@ -267,17 +274,26 @@ mostGeneralSubst bsub = traverse mostGeneral bsub
 -- Assumes the subject does not contain any type variables.
 nfMatches :: Matching NF -> IO [Subst NF]
 nfMatches (pat, subj) = do
+  -- Perform associative-unit matching on the bases to get a list of possible substitutions
   let bsubsts = auMatch (base pat, base subj)
+  -- Bring the substitution in the "base world" to the "NF world"
   nsubsts <- traverse mostGeneralSubst bsubsts
+  -- Try all possible substitutions in the NF world
   flip concatMapM nsubsts \nsubst -> do
+    -- Apply the substitution to the pattern
     let pat' = nfSubst nsubst pat
+    -- Recursively match the pattern and subject
     nsubsts' <- liftForMatchingSys nfSubst nfMatches (equivMatchingSys (pat', subj))
+    -- Compose the substitutions
     pure $ map (\nsubst' -> composeSubst nfSubst nsubst' nsubst) nsubsts'
 
 -- | Extract a matching system that is equivalent to the given matching problem.
 -- Assumes the pattern and subject have a common base.
 equivMatchingSys :: Matching NF -> MatchingSys NF
-equivMatchingSys (pat, subj) = zip (exponent pat) (exponent subj)
+equivMatchingSys (pat, subj) =
+  -- If the base of the pattern and subject are the same, then the matching problem is equivalent to the matching system where each matching problem is the corresponding pair of normal forms from the exponent of the pattern and subject.
+  -- Note that the length of the exponent of the pattern and subject are the same because the base is the same.
+  zip (exponent pat) (exponent subj)
 
 --------------------------------------------------------------------------------
 -- Pretty printing
