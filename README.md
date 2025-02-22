@@ -71,3 +71,17 @@ snd : a * b -> b
 bimap : (a -> b) -> (c -> d) -> a * c -> b * d
   by instantiating {a ← (x * x -> x) * [x], b ← (), c ← (), d ← x}
 ```
+
+### DiCosmo91
+
+- Type system: SystemF
+- Search flexibility:
+  - Insensitive to currying/uncurrying and the argument order
+  - Associative and commutative products with identity
+
+```text
+> (forall y. (y * x -> y) -> y -> y) -> [x]
+build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
+> ((y * x -> y) -> y -> y) -> [x]
+**yield no results**
+```

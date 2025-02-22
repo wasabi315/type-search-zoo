@@ -11,6 +11,7 @@ Search Flexiblity:
 > (forall y. (y * x -> y) -> y -> y) -> [x]
 build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
 > ((y * x -> y) -> y -> y) -> [x]
+**yield no results**
 ```
 
 `stack run -- signatures.txt` to run.
