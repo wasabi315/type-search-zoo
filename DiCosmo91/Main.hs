@@ -223,8 +223,7 @@ pAtom =
   (Var <$> pName)
     <|> try (Unit <$ symbol "()")
     <|> parens pTy
-    <|> List
-    <$> brackets pTy
+    <|> (List <$> brackets pTy)
 
 pProd :: Parser Ty
 pProd = foldr1 Prod <$> pAtom `sepBy1` symbol "*"
@@ -233,13 +232,10 @@ pArr :: Parser Ty
 pArr = foldr1 Arr <$> pProd `sepBy1` symbol "->"
 
 pTy :: Parser Ty
-pTy =
-  ( do
-      xs <- symbol "forall" *> some pName <* symbol "."
-      t <- pTy
-      pure $ foldr Forall t xs
-  )
-    <|> pArr
+pTy = do
+  xss <- many $ symbol "forall" *> some pName <* symbol "."
+  t <- pArr
+  pure $ foldr Forall t (concat xss)
 
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
 parseTy = parse (pTy <* eof) ""
