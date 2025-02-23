@@ -25,6 +25,19 @@ import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
 --------------------------------------------------------------------------------
+-- Utils
+
+-- Multiset equality. O(n^2).
+multisetEq :: (a -> b -> Bool) -> [a] -> [b] -> Bool
+multisetEq p = \cases
+  [] [] -> True
+  [] _ -> False
+  _ [] -> False
+  (x : xs) ys -> case break (p x) ys of
+    (_, []) -> False
+    (ys1, _ : ys2) -> multisetEq p xs (ys1 ++ ys2)
+
+--------------------------------------------------------------------------------
 -- Types
 
 infixr 5 `Prod`
@@ -180,10 +193,7 @@ equivFactor (Factor pvs pe pb) (Factor svs se sb) =
      in equivAtom pb sb' && equivNF pe se'
 
 equivNF :: NF -> NF -> Bool
-equivNF pat subj =
-  length pat == length subj
-    && flip any (permutations pat) \pat' ->
-      and (zipWith equivFactor pat' subj)
+equivNF pat subj = multisetEq equivFactor pat subj
 
 --------------------------------------------------------------------------------
 -- Parsing
