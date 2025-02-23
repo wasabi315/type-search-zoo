@@ -33,19 +33,19 @@ infixr 4 `Arr`
 
 type Name = Text
 
-data Ty n
-  = Var n -- x
+data Ty
+  = Var Name -- x
   | Unit -- ()
-  | Ty n `Prod` Ty n -- t * u
-  | Ty n `Arr` Ty n -- t -> u
-  | List (Ty n) -- [t]
-  | Forall n (Ty n) -- ∀x. t
+  | Ty `Prod` Ty -- t * u
+  | Ty `Arr` Ty -- t -> u
+  | List Ty -- [t]
+  | Forall Name Ty -- ∀x. t
   deriving stock (Show)
 
-instance (IsString n) => IsString (Ty n) where
-  fromString x = Var (fromString x)
+instance IsString Ty where
+  fromString = Var . fromString
 
-freeVarSet :: (Ord n) => Ty n -> Set n
+freeVarSet :: Ty -> Set Name
 freeVarSet = \case
   Var x -> S.singleton x
   Unit -> S.empty
@@ -57,7 +57,7 @@ freeVarSet = \case
 type Rename n = Map n n
 
 -- Close an open type by adding Foralls for all free variables
-close :: (Ord n) => Ty n -> Ty n
+close :: Ty -> Ty
 close t = foldr Forall t (freeVarSet t)
 
 --------------------------------------------------------------------------------
@@ -98,7 +98,7 @@ data Atom
   | AList NF
   deriving stock (Show, Eq, Ord)
 
-data Factor = Factor (Set UName) NF Atom
+data Factor = Factor [UName] NF Atom
   deriving stock (Show, Eq, Ord)
 
 type NF = [Factor]
@@ -112,13 +112,13 @@ renameFactor :: Rename UName -> Factor -> Factor
 renameFactor ren (Factor vs e b) =
   Factor vs (renameNF ren' e) (renameAtom ren' b)
   where
-    ren' = M.withoutKeys ren vs
+    ren' = M.withoutKeys ren (S.fromList vs)
 
 renameNF :: Rename UName -> NF -> NF
 renameNF ren = map (renameFactor ren)
 
 nfAtom :: Atom -> NF
-nfAtom a = [Factor S.empty nfUnit a]
+nfAtom a = [Factor [] nfUnit a]
 
 nfVar :: UName -> NF
 nfVar x = nfAtom (AVar x)
@@ -140,40 +140,26 @@ a `nfArr'` Factor vs e b = Factor vs (a <> e) b
 nfArr :: NF -> NF -> NF
 a `nfArr` b = map (nfArr' a) b
 
+-- forall x. (forall y. a) = forall x y. a
 nfForall' :: UName -> Factor -> Factor
-nfForall' v (Factor vs e b) = Factor (S.insert v vs) e b
+nfForall' v (Factor vs e b) = Factor (v : vs) e b
 
+-- forall x. (a1 * a2 * ... * an) = (forall x. a1) * (forall x. a2) * ... * (forall x. an)
 nfForall :: UName -> NF -> NF
 nfForall a b = map (nfForall' a) b
 
-reduce :: Map Name UName -> Ty Name -> IO NF
+-- Assume the input type is closed.
+reduce :: Map Name UName -> Ty -> IO NF
 reduce ren = \case
   Var x -> pure $ nfVar (ren M.! x)
   Unit -> pure nfUnit
-  a `Prod` b -> liftA2 nfProd (reduce ren a) (reduce ren b)
-  a `Arr` b -> liftA2 nfArr (reduce ren a) (reduce ren b)
+  a `Prod` b -> nfProd <$> reduce ren a <*> reduce ren b
+  a `Arr` b -> nfArr <$> reduce ren a <*> reduce ren b
   List a -> nfList <$> reduce ren a
   Forall x a -> do
     u <- newUnique
     let x' = UName u x
     nfForall x' <$> reduce (M.insert x x' ren) a
-
-unreduceAtom :: Atom -> Ty UName
-unreduceAtom = \case
-  AVar x -> Var x
-  AList xs -> List $ unreduce xs
-
-unreduceFactor :: Factor -> Ty UName
-unreduceFactor (Factor vs e b) =
-  addForall $ addArr $ unreduceAtom b
-  where
-    addForall t = if S.null vs then t else foldr Forall t vs
-    addArr t = if null e then t else unreduce e `Arr` t
-
-unreduce :: NF -> Ty UName
-unreduce = \case
-  [] -> Unit
-  (f : fs) -> foldr (Prod . unreduceFactor) (unreduceFactor f) fs
 
 equivAtom :: Atom -> Atom -> Bool
 equivAtom = \cases
@@ -181,8 +167,8 @@ equivAtom = \cases
   (AList a) (AList b) -> equivNF a b
   _ _ -> False
 
-possibleRenamings :: Set UName -> Set UName -> [Rename UName]
-possibleRenamings (S.toList -> vs) (S.toList -> vs') = do
+possibleRenamings :: [UName] -> [UName] -> [Rename UName]
+possibleRenamings vs vs' = do
   guard $ length vs == length vs'
   M.fromList . flip zip vs <$> permutations vs'
 
@@ -194,11 +180,10 @@ equivFactor (Factor pvs pe pb) (Factor svs se sb) =
      in equivAtom pb sb' && equivNF pe se'
 
 equivNF :: NF -> NF -> Bool
-equivNF pat subj
-  | length pat /= length subj = False
 equivNF pat subj =
-  flip any (permutations pat) \pat' ->
-    and (zipWith equivFactor pat' subj)
+  length pat == length subj
+    && flip any (permutations pat) \pat' ->
+      and (zipWith equivFactor pat' subj)
 
 --------------------------------------------------------------------------------
 -- Parsing
@@ -223,7 +208,7 @@ brackets = between (symbol "[") (symbol "]")
 pName :: Parser Name
 pName = lexeme $ takeWhile1P (Just "name") isAlphaNum
 
-pAtom :: Parser (Ty Name)
+pAtom :: Parser Ty
 pAtom =
   (Var <$> pName)
     <|> try (Unit <$ symbol "()")
@@ -231,13 +216,13 @@ pAtom =
     <|> List
     <$> brackets pTy
 
-pProd :: Parser (Ty Name)
+pProd :: Parser Ty
 pProd = foldr1 Prod <$> pAtom `sepBy1` symbol "*"
 
-pArr :: Parser (Ty Name)
+pArr :: Parser Ty
 pArr = foldr1 Arr <$> pProd `sepBy1` symbol "->"
 
-pTy :: Parser (Ty Name)
+pTy :: Parser Ty
 pTy =
   ( do
       xs <- symbol "forall" *> some pName <* symbol "."
@@ -246,22 +231,22 @@ pTy =
   )
     <|> pArr
 
-parseTy :: Text -> Either (ParseErrorBundle Text Void) (Ty Name)
+parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
 parseTy = parse (pTy <* eof) ""
 
-parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Ty Name)]
+parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Ty)]
 parseSigs path = flip parse path $ many ((,) <$> pName <*> (symbol ":" *> pTy)) <* eof
 
 punctuate :: ShowS -> [ShowS] -> ShowS
 punctuate sep xs = foldr (.) id (intersperse sep xs)
 
-prettyTy :: (n -> ShowS) -> Int -> Ty n -> ShowS
-prettyTy var = \p -> \case
-  Var x -> var x
+prettyTy :: Int -> Ty -> ShowS
+prettyTy = \p -> \case
+  Var x -> showString (T.unpack x)
   Unit -> showString "()"
-  a `Prod` b -> showParen (p > 5) $ prettyTy var 6 a . showString " * " . prettyTy var 5 b
-  a `Arr` b -> showParen (p > 4) $ prettyTy var 5 a . showString " -> " . prettyTy var 4 b
-  List a -> showChar '[' . prettyTy var 0 a . showChar ']'
+  a `Prod` b -> showParen (p > 5) $ prettyTy 6 a . showString " * " . prettyTy 5 b
+  a `Arr` b -> showParen (p > 4) $ prettyTy 5 a . showString " -> " . prettyTy 4 b
+  List a -> showChar '[' . prettyTy 0 a . showChar ']'
   Forall x a -> goForall p [x] a
   where
     goForall p xs = \case
@@ -269,9 +254,9 @@ prettyTy var = \p -> \case
       a ->
         showParen (p > 0) $
           showString "forall "
-            . punctuate (showChar ' ') (map var (reverse xs))
+            . punctuate (showChar ' ') (map (showString . T.unpack) (reverse xs))
             . showString ". "
-            . prettyTy var 0 a
+            . prettyTy 0 a
 
 --------------------------------------------------------------------------------
 
@@ -300,5 +285,5 @@ main = do
             query' <- liftIO $ reduce M.empty (close query)
             forM_ sigs' \(x, a, na) -> do
               when (equivNF query' na) do
-                outputStrLn $ T.unpack x ++ " : " ++ prettyTy (showString . T.unpack) 0 a ""
+                outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 a ""
             loop

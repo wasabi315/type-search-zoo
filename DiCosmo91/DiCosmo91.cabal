@@ -63,6 +63,5 @@ executable Rittri89
     , containers
     , haskeline
     , megaparsec
-    , multiset
     , text
   default-language: GHC2021

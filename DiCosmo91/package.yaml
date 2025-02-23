@@ -50,7 +50,6 @@ dependencies:
   - containers
   - haskeline
   - megaparsec
-  - multiset
   - text
 
 ghc-options:
