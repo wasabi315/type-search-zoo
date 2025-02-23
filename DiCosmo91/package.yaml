@@ -67,6 +67,6 @@ ghc-options:
   - -funbox-strict-fields
 
 executables:
-  Rittri89:
+  DiCosmo91:
     main: Main.hs
     source-dirs: .

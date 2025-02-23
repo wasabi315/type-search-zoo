@@ -12,7 +12,7 @@ copyright:      2025 Satoshi Takimoto
 license:        BSD-3-Clause
 build-type:     Simple
 
-executable Rittri89
+executable DiCosmo91
   main-is: Main.hs
   other-modules:
       Paths_DiCosmo91
