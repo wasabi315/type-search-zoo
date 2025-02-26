@@ -18,6 +18,8 @@ import Data.Text.IO qualified as T
 import Data.Traversable
 import Data.Unique
 import Data.Void
+import List.Transformer (ListT)
+import List.Transformer qualified as LT
 import System.Console.Haskeline
 import System.Environment
 import System.Exit
@@ -54,17 +56,16 @@ composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
 liftForMatchingSys ::
   (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> m [Subst t]) ->
-  (MatchingSys t -> m [Subst t])
+  (Matching t -> ListT m (Subst t)) ->
+  (MatchingSys t -> ListT m (Subst t))
 liftForMatchingSys appSubst alg sys =
   foldM
-    ( \accSubsts (pat, subj) -> do
-        flip concatMapM accSubsts \accSubst -> do
-          let problem = (appSubst accSubst pat, subj)
-          substs <- alg problem
-          pure $ map (\subst -> composeSubst appSubst subst accSubst) substs
+    ( \accSubst (pat, subj) -> do
+        let problem = (appSubst accSubst pat, subj)
+        subst <- alg problem
+        pure $ composeSubst appSubst subst accSubst
     )
-    [mempty] -- empty substitution
+    mempty
     sys
 
 --------------------------------------------------------------------------------
@@ -272,20 +273,18 @@ mostGeneralSubst bsub = traverse mostGeneral bsub
 
 -- | Entrypoint: match a pattern with a subject and return all possible substitutions.
 -- Assumes the subject does not contain any type variables.
-nfMatches :: Matching NF -> IO [Subst NF]
+nfMatches :: Matching NF -> ListT IO (Subst NF)
 nfMatches (pat, subj) = do
   -- Perform associative-unit matching on the bases to get a list of possible substitutions
-  let bsubsts = auMatch (base pat, base subj)
+  bsubst <- LT.select $ auMatch (base pat, base subj)
   -- Bring the substitution in the "base world" to the "NF world"
-  nsubsts <- traverse mostGeneralSubst bsubsts
-  -- Try all possible substitutions in the NF world
-  flip concatMapM nsubsts \nsubst -> do
-    -- Apply the substitution to the pattern
-    let pat' = nfSubst nsubst pat
-    -- Recursively match the pattern and subject
-    nsubsts' <- liftForMatchingSys nfSubst nfMatches (equivMatchingSys (pat', subj))
-    -- Compose the substitutions
-    pure $ map (\nsubst' -> composeSubst nfSubst nsubst' nsubst) nsubsts'
+  nsubst <- liftIO $ mostGeneralSubst bsubst
+  -- Apply the substitution to the pattern
+  let pat' = nfSubst nsubst pat
+  -- Recursively match the pattern and subject
+  nsubst' <- liftForMatchingSys nfSubst nfMatches (equivMatchingSys (pat', subj))
+  -- Compose the substitutions
+  pure $ composeSubst nfSubst nsubst' nsubst
 
 -- | Extract a matching system that is equivalent to the given matching problem.
 -- Assumes the pattern and subject have a common base.
@@ -385,10 +384,10 @@ doSearch sigs input = case parseTy (T.pack input) of
   Right query -> do
     let nfQuery = reduce $ freezeVars query
     forM_ sigs \(x, sig, nfSig) -> do
-      matches <- liftIO $ nfMatches (nfSig, nfQuery)
+      matches <- liftIO $ LT.next $ nfMatches (nfSig, nfQuery)
       case matches of
-        [] -> pure ()
-        sub : _ -> do
+        LT.Nil -> pure ()
+        LT.Cons sub _ -> do
           let sub' = unreduce <$> M.filterWithKey (\k _ -> not $ isGen k) sub
           outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 sig ""
           outputStrLn $ "  by instantiating " ++ prettySubst sub' "\n"

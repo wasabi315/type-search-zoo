@@ -54,8 +54,8 @@ dependencies:
   - containers
   - haskeline
   - megaparsec
-  - multiset
   - text
+  - list-transformer
 
 ghc-options:
   - -Wall

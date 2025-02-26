@@ -55,6 +55,7 @@ dependencies:
   - megaparsec
   - multiset
   - text
+  - list-transformer
 
 ghc-options:
   - -Wall

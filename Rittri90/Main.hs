@@ -20,6 +20,8 @@ import Data.Text.IO qualified as T
 import Data.Traversable
 import Data.Unique
 import Data.Void
+import List.Transformer (ListT)
+import List.Transformer qualified as LT
 import System.Console.Haskeline
 import System.Environment
 import System.Exit
@@ -31,9 +33,6 @@ import Prelude hiding (exponent)
 
 --------------------------------------------------------------------------------
 -- Utils
-
-concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
-concatMapM f xs = concat <$> traverse f xs
 
 concatZipWithM :: (Applicative m) => (a -> b -> m [c]) -> [a] -> [b] -> m [c]
 concatZipWithM f xs ys = concat <$> zipWithM f xs ys
@@ -63,27 +62,26 @@ composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
 liftForMatchingSys ::
   (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> m [Subst t]) ->
-  (MatchingSys t -> m [Subst t])
+  (Matching t -> ListT m (Subst t)) ->
+  (MatchingSys t -> ListT m (Subst t))
 liftForMatchingSys appSubst alg sys =
   foldM
-    ( \accSubsts (pat, subj) -> do
-        flip concatMapM accSubsts \accSubst -> do
-          let problem = (appSubst accSubst pat, subj)
-          substs <- alg problem
-          pure $ map (\subst -> composeSubst appSubst subst accSubst) substs
+    ( \accSubst (pat, subj) -> do
+        let problem = (appSubst accSubst pat, subj)
+        subst <- alg problem
+        pure $ composeSubst appSubst subst accSubst
     )
-    [mempty] -- empty substitution
+    mempty
     sys
 
 -- Lift a algorithm for a matching problem to one for a matching disjunction system
 liftForMatchingDisjSys ::
   (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> m [Subst t]) ->
-  (MatchingDisjSys t -> m [Subst t])
+  (Matching t -> ListT m (Subst t)) ->
+  (MatchingDisjSys t -> ListT m (Subst t))
 liftForMatchingDisjSys appSubst alg disjSys =
-  concatMapM (liftForMatchingSys appSubst alg) disjSys
+  LT.select disjSys >>= liftForMatchingSys appSubst alg
 
 --------------------------------------------------------------------------------
 -- Types
@@ -260,12 +258,12 @@ acuMatch = \(pat, subj) ->
       -- If the pattern is a variable, try all possible substitutions
       -- @m@ is the number of times the variable appears in the pattern
       -- @ms@ is the map of how many times each atom appears in the subject
-      ((AKVar x, m) : p) subj@(MS.toMap -> ms) -> do
+      ((AKVar x, m) : p) subj -> do
         -- Try assigning a base to the variable @x@.
         -- Since the variable appears @m@ times in the pattern,
         -- an atom that appears @n@ times in the subject can be assigned between
         -- 0 and @n `div` m@ times in the base
-        b <- traverse (\n -> [0 .. n `div` m]) ms
+        b <- traverse (\n -> [0 .. n `div` m]) (MS.toMap subj)
         let b' = MS.fromMap b
             -- Remove the assigned atoms in the base from the subject to get the remaining subject
             subj' = subj MS.\\ b'
@@ -293,13 +291,12 @@ mostGeneralSubst = traverse mostGeneral
 
 -- | Entrypoint: match a pattern with a subject and return all possible substitutions.
 -- Assumes the subject does not contain any variables.
-nfMatches :: Matching NF -> IO [Subst NF]
+nfMatches :: Matching NF -> ListT IO (Subst NF)
 nfMatches (pat, subj) = do
-  let bsubsts = acuMatch (base pat, base subj)
-  nsubsts <- traverse mostGeneralSubst bsubsts
-  flip concatMapM nsubsts \nsubst -> do
-    nsubsts' <- liftForMatchingDisjSys nfSubst nfMatches (equivMatchingDisjSys (nfSubst nsubst pat, subj))
-    pure $ map (\nsubst' -> composeSubst nfSubst nsubst' nsubst) nsubsts'
+  bsubst <- LT.select $ acuMatch (base pat, base subj)
+  nsubst <- liftIO $ mostGeneralSubst bsubst
+  nsubst' <- liftForMatchingDisjSys nfSubst nfMatches (equivMatchingDisjSys (nfSubst nsubst pat, subj))
+  pure $ composeSubst nfSubst nsubst' nsubst
 
 -- | Extract a matching disjunction system that is equivalent to the given matching problem.
 -- Assumes the pattern and subject have a common base.
@@ -415,10 +412,10 @@ doSearch sigs input = case parseTy (T.pack input) of
   Right query -> do
     let nfQuery = reduce $ freezeVars query
     forM_ sigs \(x, sig, nfSig) -> do
-      matches <- liftIO $ nfMatches (nfSig, nfQuery)
+      matches <- liftIO $ LT.next $ nfMatches (nfSig, nfQuery)
       case matches of
-        [] -> pure ()
-        (sub : _) -> do
+        LT.Nil -> pure ()
+        LT.Cons sub _ -> do
           let sub' = unreduce <$> M.filterWithKey (\k _ -> not $ isGen k) sub
           outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 sig ""
           outputStrLn $ "  by instantiating " ++ prettySubst sub' "\n"

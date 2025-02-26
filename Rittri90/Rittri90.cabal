@@ -65,6 +65,7 @@ executable Rittri90
       base >=4.7 && <5
     , containers
     , haskeline
+    , list-transformer
     , megaparsec
     , multiset
     , text
