@@ -1,0 +1,28 @@
+let id : (A : Type) -> A -> A
+let const : (A B : Type) -> A -> B -> A
+let apply : (A : Type) (B : A -> Type) -> ((x : A) -> B x) -> (x : A) -> B x
+let flip : (A B C : Type) -> (A -> B -> C) -> (B -> A -> C)
+
+let curry : (A : Type) (B : A -> Type) (C : ((x : A) * B x) -> Type)
+  -> ((p : (x : A) * B x) -> C p)
+  -> (x : A) (y : B x) -> C (x , y)
+
+let uncurry : (A : Type) (B : A -> Type) (C : ((x : A) * B x) -> Type)
+  -> ((x : A) (y : B x) -> C (x , y))
+  -> (p : (x : A) * B x) -> C p
+
+let assoc : (A : Type) (B : A -> Type) (C : (x : A) -> B x -> Type)
+  -> ((p : (x : A) * B x) * C (fst p) (snd p))
+  -> (x : A) (y : B x) * C x y
+
+let proj1 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> A
+
+let proj2 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> B (fst p)
+
+let swap : (A B : Type) -> (A * B) -> B * A
+
+let bimap : (A B : Type) (P : A -> Type) (Q : B -> Type)
+  -> (f : A -> B)
+  -> ((x : A) -> P x -> Q (f x))
+  -> ((x : A) * P x)
+  -> (y : B) * Q y

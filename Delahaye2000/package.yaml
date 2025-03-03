@@ -1,0 +1,72 @@
+name: Delahaye2000
+version: 0.1.0.0
+license: BSD-3-Clause
+author: "Satoshi Takimoto"
+maintainer: "wasabi.nvim.st@gmail.com"
+copyright: "2025 Satoshi Takimoto"
+
+language: GHC2021
+
+default-extensions:
+  - AllowAmbiguousTypes
+  - BangPatterns
+  - BlockArguments
+  - CPP
+  - ConstraintKinds
+  - DataKinds
+  - DerivingVia
+  - ExplicitNamespaces
+  - FlexibleContexts
+  - FlexibleInstances
+  - FunctionalDependencies
+  - GADTs
+  - InstanceSigs
+  - ImplicitParams
+  - KindSignatures
+  - LambdaCase
+  - MagicHash
+  - MultiParamTypeClasses
+  - OverloadedStrings
+  - PackageImports
+  - PatternSynonyms
+  - PolyKinds
+  - QualifiedDo
+  - RankNTypes
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - StandaloneKindSignatures
+  - Strict
+  - TemplateHaskell
+  - TypeApplications
+  - TypeFamilies
+  - TypeFamilyDependencies
+  - UndecidableInstances
+  - UnboxedTuples
+  - UnboxedSums
+  - ViewPatterns
+
+dependencies:
+  - base >= 4.7 && < 5
+  - containers
+  - haskeline
+  - megaparsec
+  - text
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Widentities
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wmissing-deriving-strategies
+  - -Wmissing-export-lists
+  - -Wmissing-home-modules
+  - -Wpartial-fields
+  - -Wredundant-constraints
+  - -O2
+  - -funbox-strict-fields
+
+executables:
+  Delahaye2000:
+    main: Main.hs
+    source-dirs: .
