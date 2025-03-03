@@ -1,22 +1,13 @@
-# DiCosmo91
+# Delahaye2000
 
-Type System: SystemF
+Type System: Dependent types
 
 Search Flexiblity:
 
-- Insensitive to currying/uncurrying and the argument order.
-- Associative and commutative products with identity.
-
-```text
-> (forall y. (y * x -> y) -> y -> y) -> [x]
-build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
-> ((y * x -> y) -> y -> y) -> [x]
-**yield no results**
-```
+- TBD
 
 `stack run -- signatures.txt` to run.
 
 ## References
 
-- Roberto Di Cosmo 1991. Invertibility of terms and valid isomorphisms.
-  - Provides a finite, decidable axiomatisation of the isomorphisms holding in the models of System F with surjective pairing and terminal object.
+- David Delahaye. 2000. Information retrieval in a coq proof library using type isomorphisms. In Lecture Notes in Computer Science. Springer Berlin Heidelberg, Berlin, Heidelberg, 131–147. https://doi.org/10.1007/3-540-44557-9_8
