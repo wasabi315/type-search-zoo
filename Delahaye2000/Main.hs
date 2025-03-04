@@ -63,8 +63,8 @@ data Term n
   | App (Term n) (Term n) -- t u
   | Sigma n (Type n) (Type n) -- (x : A) * B
   | Pair (Term n) (Term n) -- (t, u)
-  | Fst (Term n) -- π1
-  | Snd (Term n) -- π2
+  | Proj1 (Term n) -- π1
+  | Proj2 (Term n) -- π2
   deriving stock (Show)
 
 type Type = Term
@@ -83,8 +83,8 @@ freshen = go mempty
       TT -> pure TT
       Type -> pure Type
       Pair a b -> Pair <$> go ren a <*> go ren b
-      Fst a -> Fst <$> go ren a
-      Snd a -> Snd <$> go ren a
+      Proj1 a -> Proj1 <$> go ren a
+      Proj2 a -> Proj2 <$> go ren a
       Pi x a b -> do
         u <- newUnique
         let x' = Local u if x == "_" then "x" else x
@@ -109,8 +109,8 @@ freeVarSet = \case
   Abs x a b -> freeVarSet a <> S.delete x (freeVarSet b)
   Sigma x a b -> freeVarSet a <> S.delete x (freeVarSet b)
   Pair a b -> freeVarSet a <> freeVarSet b
-  Fst a -> freeVarSet a
-  Snd a -> freeVarSet a
+  Proj1 a -> freeVarSet a
+  Proj2 a -> freeVarSet a
   App a b -> freeVarSet a <> freeVarSet b
 
 -- Substitute a free variable @from@ inside @t@ with @to@.
@@ -126,8 +126,8 @@ subst from to = go
       TT -> TT
       Type -> Type
       Pair a b -> Pair (go a) (go b)
-      Fst a -> Fst (go a)
-      Snd a -> Snd (go a)
+      Proj1 a -> Proj1 (go a)
+      Proj2 a -> Proj2 (go a)
       App a b -> App (go a) (go b)
       Pi x a b -> Pi x (go a) (go b)
       Abs x a b -> Abs x (go a) (go b)
@@ -203,23 +203,23 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
-brackets :: Parser a -> Parser a
-brackets = between (symbol "[") (symbol "]")
-
 isKeyword :: Text -> Bool
 isKeyword x =
   x == "let"
     || x == "Type"
-    || x == "fst"
-    || x == "snd"
     || x == "Unit"
     || x == "tt"
 
 pName :: Parser Name
 pName = try $ lexeme do
-  x <- takeWhile1P (Just "name") isAlphaNum
-  guard $ not $ isKeyword x
-  pure x
+  c <- letterChar
+  cs <- takeWhileP (Just "name") isAlphaNum
+  let cs' = T.cons c cs
+  guard $ not $ isKeyword cs'
+  pure cs'
+
+pBind :: Parser Name
+pBind = pName <|> symbol "_"
 
 pAtom :: Parser (Term Name)
 pAtom =
@@ -229,56 +229,64 @@ pAtom =
     <|> (Var <$> pName)
     <|> parens pTerm
 
-pSpine :: Parser (Term Name)
-pSpine =
-  choice
-    [ do
-        _ <- symbol "fst"
-        a <- pAtom
-        foldl App (Fst a) <$> many pAtom,
-      do
-        _ <- symbol "snd"
-        a <- pAtom
-        foldl App (Snd a) <$> many pAtom,
-      foldl1 App <$> some pAtom
-    ]
+pProj :: Parser (Term Name)
+pProj = pAtom >>= go
+  where
+    go t =
+      ( do
+          _ <- char '.'
+          (char '1' *> go (Proj1 t)) <|> (char '2' *> go (Proj2 t))
+      )
+        <|> (t <$ sc)
 
-pBinder :: Parser [([Name], Type Name)]
-pBinder = some $ parens $ (,) <$> some (pName <|> symbol "_") <*> (symbol ":" *> pTerm)
+pApp :: Parser (Term Name)
+pApp = foldl1 App <$> some pProj
+
+pSigma :: Parser (Term Name)
+pSigma = do
+  optional (try $ symbol "(" *> pBind <* symbol ":") >>= \case
+    Nothing -> do
+      t <- pApp
+      (symbol "*" *> (Sigma "_" t <$> pSigma)) <|> pure t
+    Just x -> do
+      a <- pTerm
+      _ <- symbol ")"
+      _ <- symbol "*"
+      b <- pSigma
+      pure $ Sigma x a b
 
 pAbs :: Parser (Term Name)
 pAbs = do
   _ <- symbol "\\"
-  ps <- pBinder
+  xs <- some $ parens $ (,) <$> pBind <*> (symbol ":" *> pTerm)
   _ <- symbol "."
-  b <- pTerm
-  pure $ foldr (\(xs, a) t -> foldr (\x -> Abs x a) t xs) b ps
+  t <- pAbsPi
+  pure $ foldr (\(x, a) u -> Abs x a u) t xs
 
-pQuant :: Parser (Name -> Term Name -> Term Name -> Term Name)
-pQuant = (Sigma <$ symbol "*") <|> (Pi <$ symbol "->")
+pPi :: Parser (Term Name)
+pPi = do
+  optional (try $ some $ parens $ (,) <$> some pBind <*> (symbol ":" *> pTerm)) >>= \case
+    Nothing -> do
+      t <- pSigma
+      (symbol "->" *> (Pi "_" t <$> pPi)) <|> pure t
+    Just [([x], a)] -> do
+      (symbol "->" *> (Pi x a <$> pPi))
+        <|> ( do
+                dom <- symbol "*" *> (Sigma x a <$> pSigma)
+                (symbol "->" *> (Pi "_" dom <$> pPi)) <|> pure dom
+            )
+    Just dom -> do
+      _ <- symbol "->"
+      b <- pPi
+      pure $ foldr (\(xs, a) t -> foldr (\x -> Pi x a) t xs) b dom
 
-pPiSigma :: Parser (Term Name)
-pPiSigma = do
-  ps <- pBinder
-  q <- pQuant
-  b <- pTerm
-  pure $ foldr (\(xs, a) t -> foldr (\x -> q x a) t xs) b ps
-
-pFunPairSpine :: Parser (Term Name)
-pFunPairSpine = do
-  sp <- pSpine
-  choice
-    [ do
-        q <- pQuant
-        q "_" sp <$> pTerm,
-      do
-        _ <- symbol ","
-        Pair sp <$> pTerm,
-      pure sp
-    ]
+pAbsPi :: Parser (Term Name)
+pAbsPi = pAbs <|> pPi
 
 pTerm :: Parser (Term Name)
-pTerm = pAbs <|> try pPiSigma <|> pFunPairSpine
+pTerm = do
+  t <- pAbsPi
+  (symbol "," *> (Pair t <$> pTerm)) <|> pure t
 
 parseTerm :: Text -> Either (ParseErrorBundle Text Void) (Term Name)
 parseTerm = parse (sc *> pTerm <* eof) ""
@@ -293,33 +301,43 @@ parseSigs path = flip parse path do
 punctuate :: ShowS -> [ShowS] -> ShowS
 punctuate sep xs = foldr (.) id (intersperse sep xs)
 
+-- Operator precedence
+projP, appP, sigmaP, piP, absP, pairP :: Int
+projP = 5
+appP = 4
+sigmaP = 3
+piP = 2
+absP = 1
+pairP = 0
+
+par :: Int -> Int -> ShowS -> ShowS
+par p q = showParen (p > q)
+
 prettyTerm :: (n -> ShowS) -> Int -> Term n -> ShowS
-prettyTerm var = \p -> \case
-  Type -> showString "Type"
-  Unit -> showString "()"
-  TT -> showString "tt"
-  Var x -> var x
-  Pi x a b -> showParen (p > 1) $ prettyBind x a . showChar ' ' . goPi b
-  Abs x a t -> showParen (p > 0) $ showChar '\\' . prettyBind x a . goAbs t
-  App t u -> showParen (p > 2) $ prettyTerm var 2 t . showChar ' ' . prettyTerm var 3 u
-  Sigma x a b -> showParen (p > 1) $ prettyBind x a . showChar ' ' . goSigma b
-  Pair t u -> showParen (p > 1) $ prettyTerm var 2 t . showString " , " . prettyTerm var 1 u
-  Fst t -> showParen (p > 2) $ showString "fst " . prettyTerm var 3 t
-  Snd t -> showParen (p > 2) $ showString "snd " . prettyTerm var 3 t
+prettyTerm var = go
   where
-    prettyBind x a = showParen True $ var x . showString " : " . prettyTerm var 0 a
+    go p = \case
+      Type -> showString "Type"
+      Unit -> showString "Unit"
+      TT -> showString "tt"
+      Var x -> var x
+      Pi x a b -> par p piP $ bind x a . showChar ' ' . goPi b
+      Abs x a t -> par p absP $ bind x a . showChar ' ' . goAbs t
+      App t u -> par p appP $ go appP t . showChar ' ' . go projP u
+      Sigma x a b -> par p sigmaP $ bind x a . showString " * " . go sigmaP b
+      Proj1 t -> par p projP $ go projP t . showString ".1"
+      Proj2 t -> par p projP $ go projP t . showString ".2"
+      Pair t u -> par p pairP $ go absP t . showString ", " . go pairP u
+
+    bind x a = showParen True $ var x . showString " : " . go pairP a
 
     goAbs = \case
-      Abs x a t -> prettyBind x a . showChar ' ' . goAbs t
-      t -> prettyTerm var 0 t
+      Abs x a t -> bind x a . showChar ' ' . goAbs t
+      t -> showString ". " . go absP t
 
     goPi = \case
-      Pi x a b -> prettyBind x a . showChar ' ' . goPi b
-      a -> showString "-> " . prettyTerm var 1 a
-
-    goSigma = \case
-      Sigma x a b -> prettyBind x a . showChar ' ' . goSigma b
-      a -> showString "* " . prettyTerm var 1 a
+      Pi x a t -> bind x a . showChar ' ' . goPi t
+      t -> showString "-> " . go piP t
 
 --------------------------------------------------------------------------------
 

@@ -12,17 +12,17 @@ let uncurry : (A : Type) (B : A -> Type) (C : ((x : A) * B x) -> Type)
   -> (p : (x : A) * B x) -> C p
 
 let assoc : (A : Type) (B : A -> Type) (C : (x : A) -> B x -> Type)
-  -> ((p : (x : A) * B x) * C (fst p) (snd p))
-  -> (x : A) (y : B x) * C x y
+  -> (p : (x : A) * B x) * C p.1 p.2
+  -> (x : A) * (y : B x) * C x y
 
 let proj1 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> A
 
-let proj2 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> B (fst p)
+let proj2 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> B p.1
 
-let swap : (A B : Type) -> (A * B) -> B * A
+let swap : (A B : Type) -> A * B -> B * A
 
 let bimap : (A B : Type) (P : A -> Type) (Q : B -> Type)
   -> (f : A -> B)
   -> ((x : A) -> P x -> Q (f x))
-  -> ((x : A) * P x)
+  -> (x : A) * P x
   -> (y : B) * Q y
