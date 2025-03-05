@@ -4,10 +4,8 @@ import Control.Exception (Exception (..))
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Char
-import Data.Foldable
 import Data.Function
-import Data.List (intersperse, permutations)
-import Data.Map.Strict (Map)
+import Data.List (elemIndex, intersperse, permutations)
 import Data.Map.Strict qualified as M
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
@@ -16,6 +14,7 @@ import Data.String
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
+import Data.Traversable
 import Data.Unique
 import Data.Void
 import System.Console.Haskeline
@@ -141,9 +140,32 @@ rename from to = subst from (Var to)
 -- Rewriting is done in three phases to ensure confluence.
 -- Assumes the Barendregt convention.
 
+betaReduce :: Term UName -> Term UName
+betaReduce = \case
+  Type -> Type
+  Unit -> Unit
+  TT -> TT
+  v@Var {} -> v
+  Pi x a b -> Pi x (betaReduce a) (betaReduce b)
+  Abs x a t -> Abs x (betaReduce a) (betaReduce t)
+  App t u -> case (betaReduce t, betaReduce u) of
+    -- (\(x : a). t) u -> t[x<-u]
+    (Abs x _ v, u') -> betaReduce $ subst x u' v
+    (t', u') -> App t' u'
+  Sigma x a b -> Sigma x (betaReduce a) (betaReduce b)
+  Pair t u -> Pair (betaReduce t) (betaReduce u)
+  Proj1 t -> case betaReduce t of
+    -- π1(t, u) = t
+    Pair u _ -> u
+    t' -> Proj1 t'
+  Proj2 t -> case betaReduce t of
+    -- π2(t, u) = u
+    Pair _ u -> u
+    t' -> Proj2 t'
+
 -- Eliminate nested sigmas in the domain part of sigmas/pis.
 reduce1 :: Term UName -> Term UName
-reduce1 = \case
+reduce1 t = case betaReduce t of
   -- (x : (y : A) * B) * C ~> (x : A) (y : B[y := x]) (C[x := (x, y)])
   Sigma x (Sigma y a b) c ->
     reduce1 $ Sigma x a $ Sigma y (subst y (Var x) b) $ subst x (Pair (Var x) (Var y)) c
@@ -157,7 +179,7 @@ reduce1 = \case
 
 -- Eliminate units.
 reduce2 :: Term UName -> Term UName
-reduce2 = \case
+reduce2 t = case betaReduce t of
   -- (x : Unit) * A ~> A[x := tt]
   Sigma x Unit a -> reduce2 $ subst x TT a
   Sigma x a b -> case reduce2 b of
@@ -174,7 +196,7 @@ reduce2 = \case
 
 -- Distribute sigmas at the codomain part of pis.
 reduce3 :: Term UName -> Term UName
-reduce3 = \case
+reduce3 t = case betaReduce t of
   Pi x a b -> case reduce3 b of
     -- (x : A) -> (y : B) * C ~> (y : (x : A) -> B) * (x : A) -> C[y := y x]
     Sigma y c d -> reduce3 $ Sigma y (Pi x a c) $ Pi x a $ subst y (App (Var y) (Var x)) d
@@ -185,6 +207,96 @@ reduce3 = \case
 
 reduce :: Term UName -> Term UName
 reduce = reduce3 . reduce2 . reduce1
+
+-- Normal-forms
+
+-- (x1 : A1) ... (xn : An) -> (y1 : B1) * ... * (ym : Bm) * C
+-- C is the last element of the second list
+data Factor n = Factor [(n, Term n)] [(n, Term n)]
+  deriving stock (Show)
+
+-- (x1 : A1) * ... * (xn : An) * B
+-- B is the last element of the list
+type NF n = [(n, Factor n)]
+
+toFactor :: Term UName -> IO (Factor UName)
+toFactor = \case
+  Pi x a b -> do
+    toFactor b >>= \case
+      Factor fs fs' -> pure $ Factor ((x, a) : fs) fs'
+  Sigma x a b -> do
+    toFactor b >>= \case
+      Factor [] fs -> pure $ Factor [] ((x, a) : fs)
+      _ -> error "toFactor: not a normal form"
+  t -> do
+    u <- newUnique
+    let x = Local u "_"
+    pure $ Factor [] [(x, t)]
+
+toNF :: Term UName -> IO (NF UName)
+toNF = \case
+  Sigma x a b -> do
+    a' <- toFactor a
+    ((x, a') :) <$> toNF b
+  t -> do
+    u <- newUnique
+    let x = Local u "_"
+    t' <- toFactor t
+    pure [(x, t')]
+
+alphaEq :: [UName] -> [UName] -> Term UName -> Term UName -> Bool
+alphaEq ms ns = \cases
+  Type Type -> True
+  Unit Unit -> True
+  TT TT -> True
+  (Var x) (Var y) -> case (elemIndex x ms, elemIndex y ns) of
+    (Just i, Just j) -> i == j
+    (Nothing, Nothing) -> x == y
+    _ -> False
+  (Pi x a b) (Pi y c d) ->
+    alphaEq ms ns a c && alphaEq (x : ms) (y : ns) b d
+  (Abs x a b) (Abs y c d) ->
+    alphaEq ms ns a c && alphaEq (x : ms) (y : ns) b d
+  (App a b) (App c d) ->
+    alphaEq ms ns a c && alphaEq ms ns b d
+  (Sigma x a b) (Sigma y c d) ->
+    alphaEq ms ns a c && alphaEq (x : ms) (y : ns) b d
+  (Pair a b) (Pair c d) ->
+    alphaEq ms ns a c && alphaEq ms ns b d
+  (Proj1 a) (Proj1 b) -> alphaEq ms ns a b
+  (Proj2 a) (Proj2 b) -> alphaEq ms ns a b
+  _ _ -> False
+
+equivFactor' :: [UName] -> [UName] -> Factor UName -> Factor UName -> Bool
+equivFactor' ms ns = \cases
+  (Factor [] []) (Factor [] []) -> True
+  (Factor [] ((x, a) : fs)) (Factor [] ((y, b) : gs)) ->
+    alphaEq ms ns a b
+      && equivFactor' (x : ms) (y : ns) (Factor [] fs) (Factor [] gs)
+  (Factor ((x, a) : fs) fs') (Factor ((y, b) : gs) gs') ->
+    alphaEq ms ns a b
+      && equivFactor' (x : ms) (y : ns) (Factor fs fs') (Factor gs gs')
+  _ _ -> False
+
+equivFactor :: [UName] -> [UName] -> Factor UName -> Factor UName -> Bool
+equivFactor ms ns a (Factor fs gs) = any (equivFactor' ms ns a) do
+  fs' <- permutations fs
+  gs' <- permutations gs
+  pure $ Factor fs' gs'
+
+equivNF' :: [UName] -> [UName] -> NF UName -> NF UName -> Bool
+equivNF' ms ns = \cases
+  [] [] -> True
+  ((x, a) : fs) ((y, b) : gs) ->
+    equivFactor ms ns a b
+      && equivNF' (x : ms) (y : ns) fs gs
+  _ _ -> False
+
+equivNF :: NF UName -> NF UName -> Bool
+equivNF a b = any (equivNF' [] [] a) (permutations b)
+
+normalize :: Term Name -> IO (NF UName)
+normalize = toNF . reduce <=< freshen
 
 --------------------------------------------------------------------------------
 -- Parsing
@@ -313,30 +425,32 @@ pairP = 0
 par :: Int -> Int -> ShowS -> ShowS
 par p q = showParen (p > q)
 
-prettyTerm :: (n -> ShowS) -> Int -> Term n -> ShowS
-prettyTerm var = go
+prettyTerm :: Int -> Term Name -> ShowS
+prettyTerm = go
   where
     go p = \case
       Type -> showString "Type"
       Unit -> showString "Unit"
       TT -> showString "tt"
-      Var x -> var x
+      Var x -> showString (T.unpack x)
+      Pi "_" a b -> par p piP $ go sigmaP a . showString " -> " . go piP b
       Pi x a b -> par p piP $ bind x a . showChar ' ' . goPi b
-      Abs x a t -> par p absP $ bind x a . showChar ' ' . goAbs t
+      Abs x a t -> par p absP $ showChar '\\' . bind x a . showChar ' ' . goAbs t
       App t u -> par p appP $ go appP t . showChar ' ' . go projP u
+      Sigma "_" a b -> par p sigmaP $ go appP a . showString " * " . go sigmaP b
       Sigma x a b -> par p sigmaP $ bind x a . showString " * " . go sigmaP b
       Proj1 t -> par p projP $ go projP t . showString ".1"
       Proj2 t -> par p projP $ go projP t . showString ".2"
       Pair t u -> par p pairP $ go absP t . showString ", " . go pairP u
 
-    bind x a = showParen True $ var x . showString " : " . go pairP a
+    bind x a = showParen True $ showString (T.unpack x) . showString " : " . go pairP a
 
     goAbs = \case
       Abs x a t -> bind x a . showChar ' ' . goAbs t
       t -> showString ". " . go absP t
 
     goPi = \case
-      Pi x a t -> bind x a . showChar ' ' . goPi t
+      Pi x a t | x /= "_" -> bind x a . showChar ' ' . goPi t
       t -> showString "-> " . go piP t
 
 --------------------------------------------------------------------------------
@@ -351,9 +465,7 @@ main :: IO ()
 main = do
   [path] <- getArgs
   sigs <- orDie . parseSigs path =<< T.readFile path
-  sigs' <- traverse (\(x, a) -> (x,a,) . reduce <$> freshen a) sigs
-  for_ sigs' \(x, _, na) -> do
-    putStrLn $ T.unpack x ++ " : " ++ prettyTerm shows 0 na ""
+  sigs' <- for sigs \(x, a) -> (x,a,) <$> normalize a
   runInputT defaultSettings do
     outputStrLn helpText
     fix \loop -> do
@@ -365,11 +477,8 @@ main = do
         Just input -> case parseTerm (T.pack input) of
           Left e -> outputStrLn (displayException e) >> loop
           Right query -> do
-            query' <- liftIO $ freshen query
-            outputStrLn $ prettyTerm shows 0 query' ""
-            outputStrLn $ prettyTerm shows 0 (reduce query') ""
-            -- query' <- liftIO $ reduce M.empty (close query)
-            -- forM_ sigs' \(x, a, na) -> do
-            --   when (equivNF query' na) do
-            --     outputStrLn $ T.unpack x ++ " : " ++ prettyTerm 0 a ""
+            query' <- liftIO $ normalize query
+            forM_ sigs' \(x, a, na) -> do
+              when (equivNF query' na) do
+                outputStrLn $ T.unpack x ++ " : " ++ prettyTerm 0 a ""
             loop

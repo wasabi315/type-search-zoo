@@ -7,13 +7,15 @@ let curry : (A : Type) (B : A -> Type) (C : ((x : A) * B x) -> Type)
   -> ((p : (x : A) * B x) -> C p)
   -> (x : A) (y : B x) -> C (x , y)
 
-let uncurry : (A : Type) (B : A -> Type) (C : ((x : A) * B x) -> Type)
+let uncurry : (A : Type) (B : A -> Type) (C : (x : A) * B x -> Type)
   -> ((x : A) (y : B x) -> C (x , y))
   -> (p : (x : A) * B x) -> C p
 
 let assoc : (A : Type) (B : A -> Type) (C : (x : A) -> B x -> Type)
   -> (p : (x : A) * B x) * C p.1 p.2
   -> (x : A) * (y : B x) * C x y
+
+let pair : (A B : Type) -> A -> B -> A * B
 
 let proj1 : (A : Type) (B : A -> Type) (p : (x : A) * B x) -> A
 
