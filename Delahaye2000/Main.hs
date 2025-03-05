@@ -459,7 +459,7 @@ orDie :: (Exception e) => Either e a -> IO a
 orDie = either (die . displayException) pure
 
 helpText :: String
-helpText = "Enter a type to query, :q to quit, or :h for help.\nType syntax:\n  <var>  ::= [a-z][a-zA-Z0-9]\n  <type> ::= <var> | () | <type> * <type> | <type> -> <type> | [<type>] | forall <var>. <type>"
+helpText = "Enter a type to query, :q to quit, or :h for help.\nType syntax:\n  <var>  ::= [a-zA-Z][a-zA-Z0-9]*\n  <type> ::= Type\n           | <var>\n           | Unit\n           | tt\n           | (<var> : <type>) -> <type>\n           | \\(<var> : <type>). <type>\n           | <type> <type>\n           | (<var> : <type>) * <type>\n           | <type> , <type>\n           | <type>.1\n           | <type>.2"
 
 main :: IO ()
 main = do
