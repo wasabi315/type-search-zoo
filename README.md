@@ -85,3 +85,18 @@ build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
 > ((y * x -> y) -> y -> y) -> [x]
 **yield no results**
 ```
+
+## Delahaye2000
+
+- Type System: Dependent types
+- Search Flexiblity:
+  - Insensitive to currying/uncurrying and the argument order
+  - Associative sigmas with identity, and commutative if there are no dependencies between the components
+
+```text
+> (X : Type) (Y : X -> Type) (x : X) -> ((y : X) -> Y y) -> Y x
+apply : (A : Type) (B : A -> Type) -> ((x : A) -> B x) -> (x : A) -> B x
+> (X Y : Type) -> Y * X -> X * Y
+pair : (A : Type) (B : Type) -> A -> B -> A * B
+swap : (A : Type) (B : Type) -> A * B -> B * A
+```
