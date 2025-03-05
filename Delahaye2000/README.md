@@ -9,11 +9,13 @@ Search Flexiblity:
 - Commutative products (sigmas with no dependencies between the components)
 
 ```text
-> (X : Type) (Y : X -> Type) (x : X) -> ((y : X) -> Y y) -> Y x
-apply : (A : Type) (B : A -> Type) -> ((x : A) -> B x) -> (x : A) -> B x
 > (X Y : Type) -> Y * X -> X * Y
 pair : (A : Type) (B : Type) -> A -> B -> A * B
 swap : (A : Type) (B : Type) -> A * B -> B * A
+> (P : (A : Type) * A) -> P.1
+id : (A : Type) -> A -> A
+> (b : Bool) -> Eq Bool b false -> Eq Bool b true -> False
+eqTrueFalseAbs : (b : Bool) -> Eq Bool b true -> Eq Bool b false -> False
 ```
 
 `stack run -- signatures.txt` to run.

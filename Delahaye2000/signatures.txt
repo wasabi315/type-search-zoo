@@ -28,3 +28,17 @@ let bimap : (A B : Type) (P : A -> Type) (Q : B -> Type)
   -> ((x : A) -> P x -> Q (f x))
   -> (x : A) * P x
   -> (y : B) * Q y
+
+let False : Type
+let Not : Type -> Type
+let Or : Type -> Type -> Type
+
+let Eq : (A : Type) -> A -> A -> Type
+
+let LEM : (A : Type) -> Or A (Not A)
+
+let Bool : Type
+let true : Bool
+let false : Bool
+
+let eqTrueFalseAbs : (b : Bool) -> Eq Bool b true -> Eq Bool b false -> False
