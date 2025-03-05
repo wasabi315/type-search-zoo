@@ -244,6 +244,11 @@ toNF = \case
     t' <- toFactor t
     pure [(x, t')]
 
+normalize :: Term Name -> IO (NF UName)
+normalize = toNF . reduce <=< freshen
+
+-- alpha equivalence modulo permutation of sigma components and pi domains
+
 alphaEq :: [UName] -> [UName] -> Term UName -> Term UName -> Bool
 alphaEq ms ns = \cases
   Type Type -> True
@@ -294,9 +299,6 @@ equivNF' ms ns = \cases
 
 equivNF :: NF UName -> NF UName -> Bool
 equivNF a b = any (equivNF' [] [] a) (permutations b)
-
-normalize :: Term Name -> IO (NF UName)
-normalize = toNF . reduce <=< freshen
 
 --------------------------------------------------------------------------------
 -- Parsing

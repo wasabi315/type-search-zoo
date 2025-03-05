@@ -5,7 +5,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.Char
 import Data.Function
-import Data.List (intersperse, permutations)
+import Data.List (elemIndex, intersperse, permutations)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Set (Set)
@@ -67,8 +67,6 @@ freeVarSet = \case
   List a -> freeVarSet a
   Forall x a -> S.delete x (freeVarSet a)
 
-type Rename n = Map n n
-
 -- Close an open type by adding Foralls for all free variables
 close :: Ty -> Ty
 close t = foldr Forall t (freeVarSet t)
@@ -116,20 +114,6 @@ data Factor = Factor [UName] NF Atom
 
 type NF = [Factor]
 
-renameAtom :: Rename UName -> Atom -> Atom
-renameAtom ren = \case
-  v@(AVar x) -> maybe v AVar $ ren M.!? x
-  AList a -> AList $ renameNF ren a
-
-renameFactor :: Rename UName -> Factor -> Factor
-renameFactor ren (Factor vs e b) =
-  Factor vs (renameNF ren' e) (renameAtom ren' b)
-  where
-    ren' = M.withoutKeys ren (S.fromList vs)
-
-renameNF :: Rename UName -> NF -> NF
-renameNF ren = map (renameFactor ren)
-
 nfAtom :: Atom -> NF
 nfAtom a = [Factor [] nfUnit a]
 
@@ -174,26 +158,30 @@ reduce ren = \case
     let x' = UName u x
     nfForall x' <$> reduce (M.insert x x' ren) a
 
-equivAtom :: Atom -> Atom -> Bool
-equivAtom = \cases
-  (AVar px) (AVar sx) -> px == sx
-  (AList a) (AList b) -> equivNF a b
+-- Alpha equivalence modulo permutation of foralls and product components.
+
+equivAtom :: [UName] -> [UName] -> Atom -> Atom -> Bool
+equivAtom vs vs' = \cases
+  (AVar x) (AVar x') -> case (elemIndex x vs, elemIndex x' vs') of
+    (Just i, Just i') -> i == i'
+    (Nothing, Nothing) -> x == x'
+    _ -> False
+  (AList a) (AList a') -> equivNF vs vs' a a'
   _ _ -> False
 
-possibleRenamings :: [UName] -> [UName] -> [Rename UName]
-possibleRenamings vs vs' = do
-  guard $ length vs == length vs'
-  M.fromList . flip zip vs <$> permutations vs'
+equivFactor :: [UName] -> [UName] -> Factor -> Factor -> Bool
+equivFactor vs vs' (Factor ws e b) (Factor ws' e' b') =
+  flip any (permutations ws) \ws'' ->
+    let us = reverse ws'' ++ vs
+     in equivAtom us us' b b' && equivNF us us' e e'
+  where
+    us' = reverse ws' ++ vs'
 
-equivFactor :: Factor -> Factor -> Bool
-equivFactor (Factor pvs pe pb) (Factor svs se sb) =
-  flip any (possibleRenamings pvs svs) \ren ->
-    let se' = renameNF ren se
-        sb' = renameAtom ren sb
-     in equivAtom pb sb' && equivNF pe se'
+equivNF :: [UName] -> [UName] -> NF -> NF -> Bool
+equivNF vs vs' pat subj = multisetEq (equivFactor vs vs') pat subj
 
-equivNF :: NF -> NF -> Bool
-equivNF pat subj = multisetEq equivFactor pat subj
+equiv :: NF -> NF -> Bool
+equiv = equivNF [] []
 
 --------------------------------------------------------------------------------
 -- Parsing
@@ -238,7 +226,7 @@ pTy = do
   pure $ foldr Forall t (concat xss)
 
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
-parseTy = parse (pTy <* eof) ""
+parseTy = parse (sc *> pTy <* eof) ""
 
 parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Ty)]
 parseSigs path = flip parse path $ many ((,) <$> pName <*> (symbol ":" *> pTy)) <* eof
@@ -290,6 +278,6 @@ main = do
           Right query -> do
             query' <- liftIO $ reduce M.empty (close query)
             forM_ sigs' \(x, a, na) -> do
-              when (equivNF query' na) do
+              when (equiv query' na) do
                 outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 a ""
             loop
