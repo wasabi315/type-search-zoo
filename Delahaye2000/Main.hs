@@ -5,7 +5,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.Char
 import Data.Function
-import Data.List (elemIndex, intersperse, permutations)
+import Data.List (elemIndex, permutations)
 import Data.Map.Strict qualified as M
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
@@ -23,19 +23,6 @@ import System.Exit
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
-
---------------------------------------------------------------------------------
--- Utils
-
--- Multiset equality. O(n^2).
-multisetEq :: (a -> b -> Bool) -> [a] -> [b] -> Bool
-multisetEq p = \cases
-  [] [] -> True
-  [] _ -> False
-  _ [] -> False
-  (x : xs) ys -> case break (p x) ys of
-    (_, []) -> False
-    (ys1, _ : ys2) -> multisetEq p xs (ys1 ++ ys2)
 
 ------------------------------------------------------------------------------
 -- Terms
@@ -132,11 +119,19 @@ subst from to = go
       Abs x a b -> Abs x (go a) (go b)
       Sigma x a b -> Sigma x (go a) (go b)
 
-rename :: UName -> UName -> Term UName -> Term UName
-rename from to = subst from (Var to)
-
 --------------------------------------------------------------------------------
 -- Main algorithm
+-- Axioms:
+--   1. A = B if A and B are beta-equivalent
+--   2. (x : A) * B = (x : B) * A if x are not free in A and B
+--   3. (x : (y : A) * B) * C = (x : A) * (y : B[y <- x]) * C[x <- (x, y)]
+--   4. (x : (y : A) * B) -> C = (x : A) (y : B[y <- x]) -> C[x <- (x, y)]
+--   5. (x : A) -> (y : B) * C = (y : (x : A) -> B) * (x : A) -> C[y <- y x]
+--   6. (x : A) * Unit = A
+--   7. (x : Unit) * A = A[x <- tt]
+--   8. (x : A) -> Unit = Unit
+--   9. (x : Unit) -> A = A[x <- tt]
+--
 -- Rewriting is done in three phases to ensure confluence.
 -- Assumes the Barendregt convention.
 
@@ -411,9 +406,6 @@ parseSigs path = flip parse path do
 
 --------------------------------------------------------------------------------
 -- Pretty printing
-
-punctuate :: ShowS -> [ShowS] -> ShowS
-punctuate sep xs = foldr (.) id (intersperse sep xs)
 
 -- Operator precedence
 projP, appP, sigmaP, piP, absP, pairP :: Int
