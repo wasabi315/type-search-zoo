@@ -1,8 +1,27 @@
 # Rittri90
 
-- Insensitive to currying/uncurrying and argument order
-- Associative-commutative products with identity
-- Able to match types more general than the query type
+A type-based library search algorithm for Hindley-Milner type system based on CCC-matching in [Rittri90].
+Given a query type, it finds functions whose type matches (can be instantiated to) the query type modulo the following isomorphisms which are valid in any cartesian closed category:
+
+```math
+\begin{align*}
+  A \times (B \times C) & = (A \times B) \times C \\
+  A \times B & = B \times A \\
+  A \times 1 & = A \\
+  A \rightarrow (B \rightarrow C) & = (A \times B) \rightarrow C \\
+  1 \rightarrow A & = A \\
+  A \rightarrow (B \times C) & = (A \rightarrow B) \times (A \rightarrow C) \\
+  A \rightarrow 1 & = 1
+\end{align*}
+```
+
+The search features are the following:
+
+- Insensitivity to
+  - Currying/uncurrying
+  - The order of arguments and product components
+  - A function that returns a pair / a pair of functions that return the components
+- Ability to match types more general than the query type
 
 ```text
 > (x * x -> x) -> [x] -> x -> x
@@ -25,7 +44,7 @@ bimap : (a -> b) -> (c -> d) -> a * c -> b * d
   by instantiating {a ← (x * x -> x) * [x], b ← (), c ← (), d ← x}
 ```
 
-`stack run -- signatures.txt` to run.
+`stack run -- signatures.txt` to try it out.
 
 ## References
 

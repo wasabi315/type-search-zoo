@@ -1,9 +1,9 @@
 # NPS93
 
-A type-based library search algorithm based on CC-unification in [NPS93].
-Given a query type, it finds functions whose type unifies with the query type under the following isomorphisms, which are valid in any symmetric monoidal closed category:
+A type-based library search algorithm for Hindley-Milner type system based on CC-unification in [NPS93].
+Given a query type, it finds functions whose type unifies with the query type modulo the following isomorphisms which are valid in any symmetric monoidal closed category:
 
-$$
+```math
 \begin{align*}
   A \times (B \times C) & = (A \times B) \times C \\
   A \times B & = B \times A \\
@@ -11,20 +11,22 @@ $$
   A \rightarrow (B \rightarrow C) & = (A \times B) \rightarrow C \\
   1 \rightarrow A & = A
 \end{align*}
-$$
+```
 
 These isomorphisms are not used because they would make the unification problem undecidable:
 
-$$
+```math
 \begin{align*}
   A \rightarrow (B \times C) & = (A \rightarrow B) \times (A \rightarrow C) \\
   A \rightarrow 1 & = 1
 \end{align*}
-$$
+```
 
-The search features:
+Resulting search features are the following:
 
-- Insensitivity to currying/uncurrying and the order of arguments or components in products
+- Insensitivity to
+  - Currying/uncurrying
+  - The order of arguments and product components
 - Ability to match types more general than the query type
 - Support for variables in the query that can be unified (e.g. `?a`)
 
@@ -48,7 +50,7 @@ const : a -> b -> a
 ... (more results)
 ```
 
-`stack run -- signatures.txt` to run.
+`stack run -- signatures.txt` to try it out.
 
 ## References
 

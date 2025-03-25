@@ -1,8 +1,27 @@
 # Lang78
 
-- Insensitive to currying/uncurrying
-- Associative products with identity
-- Able to match types more general than the query type
+A type-based library search algorithm for Hindley-Milner type system due to Lang.
+Given a query type, it finds functions whose type matches (can be instantiated to) the query type modulo the following isomorphisms:
+
+```math
+\begin{align*}
+  A \times (B \times C) & = (A \times B) \times C \\
+  A \times 1 & = A \\
+  1 \times A & = A \\
+  A \rightarrow (B \rightarrow C) & = (A \times B) \rightarrow C \\
+  1 \rightarrow A & = A \\
+  A \rightarrow (B \times C) & = (A \rightarrow B) \times (A \rightarrow C) \\
+  A \rightarrow 1 & = 1
+\end{align*}
+```
+
+The search features are the following:
+
+- Insensitivity to
+  - Currying/uncurrying
+  - Associativity of products
+  - A function that returns a pair / a pair of functions that return the components
+- Ability to match types more general than the query type
 
 ```text
 > x -> x -> x
@@ -19,7 +38,7 @@ bimap : (a -> b) -> (c -> d) -> a * c -> b * d
   by instantiating {a ← x, b ← (), c ← (), d ← x}
 ```
 
-`stack run -- signatures.txt` to run.
+`stack run -- signatures.txt` to try it out.
 
 ## References
 

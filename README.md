@@ -10,9 +10,11 @@ A collection of type-based library search algorithms.
 ### Rittri89
 
 - Type system: Hindley-Milner
-- Search flexibility:
-  - Insensitive to currying/uncurrying and the argument order
-  - Associative and commutative products with identity
+- Search features:
+  - Insensitivity to
+    - Currying/uncurrying
+    - The order of arguments and product components
+    - A function that returns a pair / a pair of functions that return the components
 
 ```text
 > (x * y -> y) -> [x] -> y -> y
@@ -23,10 +25,12 @@ foldl : (b -> a -> b) -> b -> [a] -> b
 ### Lang78
 
 - Type system: Hindley-Milner
-- Search flexibility:
-  - Insensitive to currying/uncurrying
-  - Associative products with identity
-  - Able to match types more general than the query type
+- Search features:
+  - Insensitivity to
+    - Currying/uncurrying
+    - Associativity of products
+    - A function that returns a pair / a pair of functions that return the components
+  - Ability to match types more general than the query type
 
 ```text
 > x -> x -> x
@@ -46,10 +50,12 @@ bimap : (a -> b) -> (c -> d) -> a * c -> b * d
 ### Rittri90
 
 - Type system: Hindley-Milner
-- Search flexibility:
-  - Insensitive to currying/uncurrying and the argument order
-  - Associative and commutative products with identity
-  - Able to match types more general than the query type
+- Search features:
+  - Insensitivity to
+    - Currying/uncurrying
+    - The order of arguments and product components
+    - A function that returns a pair / a pair of functions that return the components
+  - Ability to match types more general than the query type
 
 ```text
 > (x * x -> x) -> [x] -> x -> x
@@ -72,12 +78,45 @@ bimap : (a -> b) -> (c -> d) -> a * c -> b * d
   by instantiating {a ← (x * x -> x) * [x], b ← (), c ← (), d ← x}
 ```
 
+### NPS93
+
+- Type system: Hindley-Milner
+- Search features:
+  - Insensitivity to
+    - Currying/uncurrying
+    - The order of arguments and product components
+  - Ability to match types more general than the query type
+  - Support for variables in the query that can be unified (e.g. `?a`)
+
+```text
+> (x * x -> x) -> [x] -> ?a -> x
+foldr1 : (a -> a -> a) -> [a] -> a
+  by instantiating {?a ← (), a ← x}
+
+foldl1 : (a -> a -> a) -> [a] -> a
+  by instantiating {?a ← (), a ← x}
+
+foldr : (a -> b -> b) -> b -> [a] -> b
+  by instantiating {?a ← x, a ← x, b ← x}
+
+foldl : (b -> a -> b) -> b -> [a] -> b
+  by instantiating {?a ← x, a ← x, b ← x}
+
+const : a -> b -> a
+  by instantiating {?a ← x, a ← x, b ← [x] * (x * x -> x)}
+
+... (more results)
+```
+
 ### DiCosmo91
 
 - Type system: SystemF
-- Search flexibility:
-  - Insensitive to currying/uncurrying and the argument order
-  - Associative and commutative products with identity
+- Search features:
+  - Insensitivity to
+    - Currying/uncurrying
+    - The order of arguments and product components
+    - A function that returns a pair / a pair of functions that return the components
+    - The position of quantifiers (as long as not changing the meaning of the type)
 
 ```text
 > (forall y. (y * x -> y) -> y -> y) -> [x]
@@ -86,13 +125,15 @@ build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
 **yield no results**
 ```
 
-## Delahaye2000
+### Delahaye2000
 
-- Type System: Dependent types
-- Search Flexiblity:
-  - Insensitive to currying/uncurrying and the argument order
-  - Associative sigmas with identity
-  - Commutative products (sigmas with no dependencies between the components)
+- Type system: Dependent types
+- Search features:
+  - Insensitivity to (with some restrictions)
+    - $\beta$-reduced or not
+    - Currying/uncurrying
+    - The order of arguments and dependent pairs components (as long as they are not dependent on each other)
+    - A function that returns a dependent pair / a dependent pair of functions that return the components
 
 ```text
 > (X Y : Type) -> Y * X -> X * Y
