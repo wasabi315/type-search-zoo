@@ -67,6 +67,7 @@ executable Lang78
     , containers
     , haskeline
     , list-transformer
+    , logict
     , megaparsec
     , text
   default-language: GHC2021

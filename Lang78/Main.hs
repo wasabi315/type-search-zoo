@@ -1,8 +1,10 @@
 module Main where
 
+import Control.Applicative (Alternative)
 import Control.Exception (Exception (..))
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.Logic
 import Data.Char
 import Data.Foldable
 import Data.Function
@@ -10,7 +12,6 @@ import Data.List (inits, intersperse, tails)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
-import Data.Monoid
 import Data.String
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -18,8 +19,6 @@ import Data.Text.IO qualified as T
 import Data.Traversable
 import Data.Unique
 import Data.Void
-import List.Transformer (ListT)
-import List.Transformer qualified as LT
 import System.Console.Haskeline
 import System.Environment
 import System.Exit
@@ -32,8 +31,8 @@ import Prelude hiding (exponent)
 --------------------------------------------------------------------------------
 -- Utils
 
-concatMapM :: (Applicative m) => (a -> m [b]) -> [a] -> m [b]
-concatMapM f xs = concat <$> traverse f xs
+choose :: (Alternative m, Foldable t) => t a -> m a
+choose = foldr ((<|>) . pure) empty
 
 --------------------------------------------------------------------------------
 -- Matching problem vocabulary from Rittri 1990.
@@ -54,10 +53,9 @@ composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
 
 -- Lift a algorithm for a matching problem to one for a matching system
 liftForMatchingSys ::
-  (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> ListT m (Subst t)) ->
-  (MatchingSys t -> ListT m (Subst t))
+  (Matching t -> LogicT m (Subst t)) ->
+  (MatchingSys t -> LogicT m (Subst t))
 liftForMatchingSys appSubst alg sys =
   foldM
     ( \accSubst (pat, subj) -> do
@@ -273,10 +271,10 @@ mostGeneralSubst bsub = traverse mostGeneral bsub
 
 -- | Entrypoint: match a pattern with a subject and return all possible substitutions.
 -- Assumes the subject does not contain any type variables.
-nfMatches :: Matching NF -> ListT IO (Subst NF)
+nfMatches :: Matching NF -> LogicT IO (Subst NF)
 nfMatches (pat, subj) = do
   -- Perform associative-unit matching on the bases to get a list of possible substitutions
-  bsubst <- LT.select $ auMatch (base pat, base subj)
+  bsubst <- choose $ auMatch (base pat, base subj)
   -- Bring the substitution in the "base world" to the "NF world"
   nsubst <- liftIO $ mostGeneralSubst bsubst
   -- Apply the substitution to the pattern
@@ -384,13 +382,13 @@ doSearch sigs input = case parseTy (T.pack input) of
   Right query -> do
     let nfQuery = reduce $ freezeVars query
     forM_ sigs \(x, sig, nfSig) -> do
-      matches <- liftIO $ LT.next $ nfMatches (nfSig, nfQuery)
+      matches <- liftIO $ observeManyT 1 $ nfMatches (nfSig, nfQuery)
       case matches of
-        LT.Nil -> pure ()
-        LT.Cons sub _ -> do
+        [sub] -> do
           let sub' = unreduce <$> M.filterWithKey (\k _ -> not $ isGen k) sub
           outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 sig ""
           outputStrLn $ "  by instantiating " ++ prettySubst sub' "\n"
+        _ -> pure ()
 
 main :: IO ()
 main = do

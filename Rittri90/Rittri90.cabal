@@ -66,6 +66,7 @@ executable Rittri90
     , containers
     , haskeline
     , list-transformer
+    , logict
     , megaparsec
     , multiset
     , text

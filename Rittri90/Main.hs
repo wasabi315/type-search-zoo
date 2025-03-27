@@ -1,8 +1,10 @@
 module Main where
 
+import Control.Applicative (Alternative)
 import Control.Exception (Exception (..))
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.Logic
 import Data.Char
 import Data.Foldable
 import Data.Function
@@ -10,7 +12,6 @@ import Data.List (intersperse, permutations)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
-import Data.Monoid
 import Data.MultiSet (MultiSet)
 import Data.MultiSet qualified as MS
 import Data.String
@@ -20,8 +21,6 @@ import Data.Text.IO qualified as T
 import Data.Traversable
 import Data.Unique
 import Data.Void
-import List.Transformer (ListT)
-import List.Transformer qualified as LT
 import System.Console.Haskeline
 import System.Environment
 import System.Exit
@@ -36,6 +35,12 @@ import Prelude hiding (exponent)
 
 concatZipWithM :: (Applicative m) => (a -> b -> m [c]) -> [a] -> [b] -> m [c]
 concatZipWithM f xs ys = concat <$> zipWithM f xs ys
+
+choose :: (Alternative m, Foldable t) => t a -> m a
+choose = foldr ((<|>) . pure) empty
+
+foldMapA :: (Alternative m, Foldable t) => (a -> m b) -> t a -> m b
+foldMapA f = foldr ((<|>) . f) empty
 
 --------------------------------------------------------------------------------
 -- Matching problem vocabulary from Rittri 1990.
@@ -60,10 +65,9 @@ composeSubst appSubst subst2 subst1 = M.map (appSubst subst2) subst1 <> subst2
 
 -- Lift a algorithm for a matching problem to one for a matching system
 liftForMatchingSys ::
-  (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> ListT m (Subst t)) ->
-  (MatchingSys t -> ListT m (Subst t))
+  (Matching t -> LogicT m (Subst t)) ->
+  (MatchingSys t -> LogicT m (Subst t))
 liftForMatchingSys appSubst alg sys =
   foldM
     ( \accSubst (pat, subj) -> do
@@ -76,12 +80,11 @@ liftForMatchingSys appSubst alg sys =
 
 -- Lift a algorithm for a matching problem to one for a matching disjunction system
 liftForMatchingDisjSys ::
-  (Monad m) =>
   (Subst t -> t -> t) ->
-  (Matching t -> ListT m (Subst t)) ->
-  (MatchingDisjSys t -> ListT m (Subst t))
+  (Matching t -> LogicT m (Subst t)) ->
+  (MatchingDisjSys t -> LogicT m (Subst t))
 liftForMatchingDisjSys appSubst alg disjSys =
-  LT.select disjSys >>= liftForMatchingSys appSubst alg
+  foldMapA (liftForMatchingSys appSubst alg) disjSys
 
 --------------------------------------------------------------------------------
 -- Types
@@ -291,9 +294,9 @@ mostGeneralSubst = traverse mostGeneral
 
 -- | Entrypoint: match a pattern with a subject and return all possible substitutions.
 -- Assumes the subject does not contain any variables.
-nfMatches :: Matching NF -> ListT IO (Subst NF)
+nfMatches :: Matching NF -> LogicT IO (Subst NF)
 nfMatches (pat, subj) = do
-  bsubst <- LT.select $ acuMatch (base pat, base subj)
+  bsubst <- choose $ acuMatch (base pat, base subj)
   nsubst <- liftIO $ mostGeneralSubst bsubst
   nsubst' <- liftForMatchingDisjSys nfSubst nfMatches (equivMatchingDisjSys (nfSubst nsubst pat, subj))
   pure $ composeSubst nfSubst nsubst' nsubst
@@ -393,10 +396,10 @@ pTy :: Parser Ty
 pTy = foldr1 Arr <$> pProd `sepBy1` symbol "->"
 
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
-parseTy = parse (pTy <* eof) ""
+parseTy = parse (sc *> pTy <* eof) ""
 
 parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Text, Ty)]
-parseSigs path = flip parse path $ many ((,) <$> pFunName <*> (symbol ":" *> pTy)) <* eof
+parseSigs path = flip parse path $ sc *> many ((,) <$> pFunName <*> (symbol ":" *> pTy)) <* eof
 
 --------------------------------------------------------------------------------
 
@@ -412,13 +415,13 @@ doSearch sigs input = case parseTy (T.pack input) of
   Right query -> do
     let nfQuery = reduce $ freezeVars query
     forM_ sigs \(x, sig, nfSig) -> do
-      matches <- liftIO $ LT.next $ nfMatches (nfSig, nfQuery)
+      matches <- liftIO $ observeManyT 1 $ nfMatches (nfSig, nfQuery)
       case matches of
-        LT.Nil -> pure ()
-        LT.Cons sub _ -> do
+        [sub] -> do
           let sub' = unreduce <$> M.filterWithKey (\k _ -> not $ isGen k) sub
           outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 sig ""
           outputStrLn $ "  by instantiating " ++ prettySubst sub' "\n"
+        _ -> pure ()
 
 main :: IO ()
 main = do

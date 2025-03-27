@@ -52,10 +52,10 @@ dependencies:
   - base >= 4.7 && < 5
   - containers
   - haskeline
+  - logict
   - megaparsec
   - multiset
   - text
-  - list-transformer
 
 ghc-options:
   - -Wall
