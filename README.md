@@ -3,7 +3,9 @@
 > [!NOTE]
 > Work in progress.
 
-A collection of type-based library search algorithms.
+This repository contains a collection of type-based library search algorithms implemented in Haskell.
+
+Type-based library search allows users to find functions by providing a type as a query. The algorithm then attempts to match functions whose types correspond to the query. However, if the matching criteria are too strict, users might miss potentially useful or relevant functions. To address this limitation, researchers in the 1980s and 1990s developed more flexible algorithms. For instance, Rittri proposed an algorithm that is insensitive to argument order, among other improvements. This repository provides Haskell implementations of these classic algorithms.
 
 ## List of Algorithms
 
@@ -132,7 +134,7 @@ build : forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
   - Insensitivity to (with some restrictions)
     - $\beta$-reduced or not
     - Currying/uncurrying
-    - The order of arguments and dependent pairs components (as long as they are not dependent on each other)
+    - The order of arguments (as long as they are not dependent on each other) and non-dependent pair components
     - A function that returns a dependent pair / a dependent pair of functions that return the components
 
 ```text
