@@ -1,0 +1,4 @@
+name: Rittri89
+include: .
+depend: standard-library
+flags: --cubical-compatible -WnoUnsupportedIndexedMatch
