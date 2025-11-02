@@ -25,7 +25,8 @@ data Factor (n : ℕ) : Set
 NF : (n : ℕ) → Set
 
 data Atom n where
-  var : (x : Fin n) → Atom n
+  var   : (x : Fin n) → Atom n
+  `List : (ν : NF n) → Atom n
 
 data Factor n where
   _`→_ : (ν : NF n) (α : Atom n) → Factor n
@@ -68,7 +69,8 @@ Atom⟦_⟧   : Atom n   → Ctx⟦ n ⟧ ℓ → Set ℓ
 Factor⟦_⟧ : Factor n → Ctx⟦ n ⟧ ℓ → Set ℓ
 NF⟦_⟧     : NF n     → Ctx⟦ n ⟧ ℓ → Set ℓ
 
-Atom⟦ var x ⟧ ρ = ρ ! x
+Atom⟦ var x   ⟧ ρ = ρ ! x
+Atom⟦ `List ν ⟧ ρ = List (NF⟦ ν ⟧ ρ)
 
 Factor⟦ ν `→ α ⟧ ρ = NF⟦ ν ⟧ ρ → Atom⟦ α ⟧ ρ
 

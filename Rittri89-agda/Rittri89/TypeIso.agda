@@ -3,6 +3,8 @@ module Rittri89.TypeIso where
 open import Level using (Level) renaming (zero to ℓ-zero)
 open import Axiom.Extensionality.Propositional using (Extensionality)
 open import Data.Fin.Base using (Fin)
+open import Data.List.Base as List using (List; []; _∷_)
+open import Data.List.Properties as List using ()
 open import Data.Nat.Base using (ℕ)
 open import Data.Product.Base using (_×_; _,_; proj₁; proj₂)
 open import Data.Product.Algebra using (×-cong; ×-comm; ×-assoc; ×-identityˡ)
@@ -39,6 +41,7 @@ data _≅_ {n} : (α β : Type n) → Set where
   -- Congruence
   _`×_  : (A≅B : A ≅ B) (C≅D : C ≅ D) → A `× C ≅ B `× D
   _`→_  : (A≅B : A ≅ B) (C≅D : C ≅ D) → A `→ C ≅ B `→ D
+  `List : (A≅B : A ≅ B) → `List A ≅ `List B
 
   -- Axioms
   `×-comm        : ∀ A B → A `× B ≅ B `× A
@@ -55,6 +58,7 @@ sym′ (sym A≅B)       = A≅B
 sym′ (trans A≅B B≅C) = trans (sym′ B≅C) (sym′ A≅B)
 sym′ (A≅B `× C≅D)    = sym′ A≅B `× sym′ C≅D
 sym′ (A≅B `→ C≅D)    = sym′ A≅B `→ sym′ C≅D
+sym′ (`List A≅B)     = `List (sym′ A≅B)
 sym′ A≅B             = sym A≅B
 
 trans′ : A ≅ B → B ≅ C → A ≅ C
@@ -70,6 +74,10 @@ _`→′_ : A ≅ B → C ≅ D → A `→ C ≅ B `→ D
 refl `→′ refl = refl
 A≅B  `→′ C≅D  = A≅B `→ C≅D
 
+`List′ : A ≅ B → `List A ≅ `List B
+`List′ refl = refl
+`List′ A≅B = `List A≅B
+
 isEquivalence : ∀ n → IsEquivalence (_≅_ {n = n})
 isEquivalence n = record { refl = refl ; sym = sym′ ; trans = trans′ }
 
@@ -84,6 +92,19 @@ setoid n = record { _≈_ = _≅_ {n = n} ; isEquivalence = isEquivalence n }
 
 --------------------------------------------------------------------------------
 -- Interpretation into ↔
+
+List-map-pres-inverse : ∀ {a b} {A : Set a} {B : Set b} (f : A → B) {g : B → A} →
+                        (∀ x → f (g x) ≡ x) →
+                        (∀ xs → List.map f (List.map g xs) ≡ xs)
+List-map-pres-inverse _ inv []       = ≡.refl
+List-map-pres-inverse _ inv (x ∷ xs) = ≡.cong₂ _∷_ (inv x) (List-map-pres-inverse _ inv xs)
+
+List-cong : ∀ {a b} {A : Set a} {B : Set b} → A ↔ B → List A ↔ List B
+List-cong A↔B =
+  mk↔ₛ′ (List.map to) (List.map from)
+        (List-map-pres-inverse to strictlyInverseˡ)
+        (List-map-pres-inverse from strictlyInverseʳ)
+  where open Inverse A↔B
 
 →-curry : ∀ {a b c} (A : Set a) (B : Set b) (C : Set c) →
           (A → (B → C)) ↔ ((A × B) → C)
@@ -113,6 +134,7 @@ module _ (ext : Extensionality ℓ ℓ) where
   ≅⟦ trans A≅B B≅C        ⟧ ρ = ↔-trans (≅⟦ A≅B ⟧ ρ) (≅⟦ B≅C ⟧ ρ)
   ≅⟦ A≅B `× C≅D           ⟧ ρ = ×-cong (≅⟦ A≅B ⟧ ρ) (≅⟦ C≅D ⟧ ρ)
   ≅⟦ A≅B `→ C≅D           ⟧ ρ = →-cong-↔ ext ext (≅⟦ A≅B ⟧ ρ) (≅⟦ C≅D ⟧ ρ)
+  ≅⟦ `List A≅B            ⟧ ρ = List-cong (≅⟦ A≅B ⟧ ρ)
   ≅⟦ `×-comm A B          ⟧ ρ = ×-comm (Type⟦ A ⟧ ρ) (Type⟦ B ⟧ ρ)
   ≅⟦ `×-assoc A B C       ⟧ ρ = ×-assoc _ (Type⟦ A ⟧ ρ) (Type⟦ B ⟧ ρ) (Type⟦ C ⟧ ρ)
   ≅⟦ `→-curry A B C       ⟧ ρ = →-curry (Type⟦ A ⟧ ρ) (Type⟦ B ⟧ ρ) (Type⟦ C ⟧ ρ)

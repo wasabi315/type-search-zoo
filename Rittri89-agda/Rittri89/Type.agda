@@ -2,6 +2,7 @@ module Rittri89.Type where
 
 open import Level using (Level; Lift) renaming (suc to ℓ-suc)
 open import Data.Fin.Base using (Fin; zero; suc)
+open import Data.List.Base as List using (List)
 open import Data.Nat.Base using (ℕ; zero; suc)
 open import Data.Product.Base using (_×_; _,_)
 open import Data.Unit.Polymorphic.Base using (⊤)
@@ -21,6 +22,7 @@ data Type (n : ℕ) : Set where
   `⊤    : Type n
   _`×_  : (A B : Type n) → Type n
   _`→_  : (A B : Type n) → Type n
+  `List : (A : Type n) → Type n
 
 --------------------------------------------------------------------------------
 -- Set interpretation
@@ -38,3 +40,4 @@ Type⟦ var x   ⟧ ρ = ρ ! x
 Type⟦ `⊤      ⟧ ρ = ⊤
 Type⟦ α `× β  ⟧ ρ = Type⟦ α ⟧ ρ × Type⟦ β ⟧ ρ
 Type⟦ α `→ β  ⟧ ρ = Type⟦ α ⟧ ρ → Type⟦ β ⟧ ρ
+Type⟦ `List α  ⟧ ρ = List (Type⟦ α ⟧ ρ)

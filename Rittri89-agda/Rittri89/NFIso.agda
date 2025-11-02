@@ -17,9 +17,10 @@ open import Function.Properties using (→-cong-↔)
 open import Relation.Binary.Bundles using (Setoid; DecSetoid)
 open import Relation.Binary.PropositionalEquality.Core as ≡ using (_≡_)
 open import Relation.Binary.Structures using (IsEquivalence; IsDecEquivalence)
-open import Relation.Nullary.Decidable.Core as Dec using (Dec; _×-dec_)
+open import Relation.Nullary.Decidable.Core as Dec using (Dec; _×-dec_; no)
 
 open import Rittri89.Type using (Ctx⟦_⟧)
+open import Rittri89.TypeIso using (List-cong)
 open import Rittri89.NF
 
 private
@@ -80,7 +81,8 @@ isEquivalenceⁿ : ∀ n → IsEquivalence (_≅ⁿ_ {n = n})
 isEquivalenceⁿ n = record { refl = reflⁿ ; sym = symⁿ ; trans = transⁿ }
 
 data _≅ᵃ_ where
-  var : (x≡y : x ≡ y) → var x ≅ᵃ var y
+  var   : (x≡y : x ≡ y) → var x ≅ᵃ var y
+  `List : (ν≅μ : ν ≅ⁿ μ) → `List ν ≅ᵃ `List μ
 
 data _≅ᶠ_ where
   _`→_ : (ν≅μ : ν ≅ⁿ μ) (α≅β : α ≅ᵃ β) → ν `→ α ≅ᶠ μ `→ β
@@ -88,20 +90,23 @@ data _≅ᶠ_ where
 reflᵃ : α ≅ᵃ α
 reflᶠ : φ ≅ᶠ φ
 
-reflᵃ {α = var x}  = var ≡.refl
-reflᶠ {φ = ν `→ α} = reflⁿ `→ reflᵃ
+reflᵃ {α = var x}   = var ≡.refl
+reflᵃ {α = `List ν} = `List reflⁿ
+reflᶠ {φ = ν `→ α}  = reflⁿ `→ reflᵃ
 
 symᵃ : α ≅ᵃ β → β ≅ᵃ α
 symᶠ : φ ≅ᶠ ψ → ψ ≅ᶠ φ
 
 symᵃ (var x≡y)    = var (≡.sym x≡y)
+symᵃ (`List ν≅μ)  = `List (symⁿ ν≅μ)
 symᶠ (ν≅μ `→ α≅β) = symⁿ ν≅μ `→ symᵃ α≅β
 
 transᵃ : α ≅ᵃ β → β ≅ᵃ γ → α ≅ᵃ γ
 transᶠ : {φ ψ θ : Factor n} → φ ≅ᶠ ψ → ψ ≅ᶠ θ → φ ≅ᶠ θ
 
-transᵃ (var x≡y) (var y≡z) = var (≡.trans x≡y y≡z)
-transᶠ {n = n} (ν≅μ `→ α≅β) (ρ≅σ `→ β≅γ) = transⁿ {n = n} ν≅μ ρ≅σ `→ transᵃ α≅β β≅γ
+transᵃ (var x≡y)    (var y≡z)    = var (≡.trans x≡y y≡z)
+transᵃ (`List ν≅μ)  (`List μ≅ι)  = `List (transⁿ ν≅μ μ≅ι)
+transᶠ (ν≅μ `→ α≅β) (ρ≅σ `→ β≅γ) = transⁿ ν≅μ ρ≅σ `→ transᵃ α≅β β≅γ
 
 isEquivalenceᵃ n = record { refl = reflᵃ ; sym = symᵃ ; trans = transᵃ }
 isEquivalenceᶠ n = record { refl = reflᶠ ; sym = symᶠ ; trans = transᶠ }
@@ -109,23 +114,11 @@ isEquivalenceᶠ n = record { refl = reflᶠ ; sym = symᶠ ; trans = transᶠ }
 var-injective : var x ≅ᵃ var y → x ≡ y
 var-injective (var x≡y) = x≡y
 
+`List-injective : `List ν ≅ᵃ `List μ → ν ≅ⁿ μ
+`List-injective (`List ν≅μ) = ν≅μ
+
 `→-injective : ν `→ α ≅ᶠ μ `→ β → ν ≅ⁿ μ × α ≅ᵃ β
 `→-injective (ν≅μ `→ α≅β) = ν≅μ , α≅β
-
-record _⊑_ {T U : ℕ → Set} ⦃ _ : T ⊆ U ⦄ (R : ∀ {n} → T n → T n → Set) (S : ∀ {n} → U n → U n → Set) : Set where
-  field
-   ↑↑_ : {x y : T n} → R x y → S (↑ x) (↑ y)
-
-open _⊑_ ⦃ ... ⦄ public
-
-instance
-  ≅ᵃ⊑≅ᶠ : _≅ᵃ_ ⊑ _≅ᶠ_
-  ≅ᶠ⊑≅ⁿ : _≅ᶠ_ ⊑ _≅ⁿ_
-  ≅ᵃ⊑≅ⁿ : _≅ᵃ_ ⊑ _≅ⁿ_
-
-  ≅ᵃ⊑≅ᶠ .↑↑_ α≅β = reflⁿ `→ α≅β
-  ≅ᶠ⊑≅ⁿ .↑↑_ φ≅ψ = φ≅ψ `×′ reflⁿ
-  ≅ᵃ⊑≅ⁿ .↑↑_ α≅β = (reflⁿ `→ α≅β) `×′ reflⁿ
 
 -- Up to propositional equality
 ∪-identityʳ : (ν : NF n) → ν ∪ `⊤ ≡ ν
@@ -170,7 +163,10 @@ module _ {n : ℕ} where
     using ()
     renaming (permutation? to infix 4 _≟ⁿ_)
 
-var x ≟ᵃ var y = Dec.map′ var var-injective (x Fin.≟ y)
+var x   ≟ᵃ var y   = Dec.map′ var var-injective (x Fin.≟ y)
+`List ν ≟ᵃ `List μ = Dec.map′ `List `List-injective (ν ≟ⁿ μ)
+var x   ≟ᵃ `List ν = no λ ()
+`List ν ≟ᵃ var x   = no λ ()
 
 ν `→ α ≟ᶠ μ `→ β = Dec.map′ (uncurry _`→_) `→-injective (ν ≟ⁿ μ ×-dec α ≟ᵃ β)
 
@@ -197,6 +193,7 @@ module _ (ext : Extensionality ℓ ℓ) where
   ≅ⁿ⟦_⟧ : {ν μ : NF n} → ν ≅ⁿ μ → (ρ : Ctx⟦ n ⟧ ℓ) → NF⟦ ν ⟧ ρ ↔ NF⟦ μ ⟧ ρ
 
   ≅ᵃ⟦ var ≡.refl ⟧ ρ = ↔-refl
+  ≅ᵃ⟦ `List ν≅μ  ⟧ ρ = List-cong (≅ⁿ⟦ ν≅μ ⟧ ρ)
 
   ≅ᶠ⟦ ν≅μ `→ α≅β ⟧ ρ = →-cong-↔ ext ext (≅ⁿ⟦ ν≅μ ⟧ ρ) (≅ᵃ⟦ α≅β ⟧ ρ)
 
