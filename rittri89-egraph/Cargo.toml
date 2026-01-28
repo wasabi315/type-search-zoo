@@ -1,0 +1,8 @@
+[package]
+name = "rittri89-egraph"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+slotted-egraphs = { version = "0.0.36", features = ["explanations"] }
+easy-repl = "0.2.1"
