@@ -155,207 +155,208 @@ module _ (ext : Extensionality _ _) {A B : Set} where
   itlist-sig    = (#A `→ #B `→ #B) `→ `List #A `→ #B `→ #B
   fold_left-sig = (#A `× #B `→ #B) `→ #B `→ `List #A `→ #B
 
-  _ : (itlist-sig ≟ fold_left-sig) ≡ yes (trans
-     (trans
-      (trans
-       (trans (sym (`→-identityˡ (var 1F)))
-        (trans (sym (`×-identityˡ (`⊤ `→ var 1F)))
-         (sym (`×-comm (`⊤ `→ var 1F) `⊤)))
-        `→
-        trans
-        (trans (sym (`→-identityˡ (var 0F)))
-         (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
-          (sym (`×-comm (`⊤ `→ var 0F) `⊤)))
-         `→
-         trans (sym (`→-identityˡ (var 0F)))
-         (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
-          (sym (`×-comm (`⊤ `→ var 0F) `⊤))))
-        (trans (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤) (`⊤ `→ var 0F) `⊤)
-         (trans (`→-curry ((`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F))
-          (trans (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤) (refl `× `×-identityˡ `⊤) `→
-           refl)
-          `× `→-zeroʳ ((`⊤ `→ var 0F) `× `⊤))))
-       (trans
-        (`→-distribˡ-`× ((`⊤ `→ var 1F) `× `⊤)
-         ((`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤)
-        (trans
-         (`→-curry ((`⊤ `→ var 1F) `× `⊤) ((`⊤ `→ var 0F) `× `⊤) (var 0F))
-         (trans (`×-assoc (`⊤ `→ var 1F) `⊤ ((`⊤ `→ var 0F) `× `⊤))
-          (refl `× `×-identityˡ ((`⊤ `→ var 0F) `× `⊤))
-          `→ refl)
-         `× `→-zeroʳ ((`⊤ `→ var 1F) `× `⊤)))
-       `→
-       trans
+  _ : (itlist-sig ≟ fold_left-sig) ≡ yes
+    (trans
        (trans
         (trans
-         (`List
-          (trans (sym (`→-identityˡ (var 1F)))
-           (trans (sym (`×-identityˡ (`⊤ `→ var 1F)))
-            (sym (`×-comm (`⊤ `→ var 1F) `⊤)))))
-         (sym (`→-identityˡ (`List ((`⊤ `→ var 1F) `× `⊤)))))
-        (trans (sym (`×-identityˡ (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤))))
-         (sym (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤)))
-        `→
-        trans
-        (trans (sym (`→-identityˡ (var 0F)))
-         (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
-          (sym (`×-comm (`⊤ `→ var 0F) `⊤)))
-         `→
-         trans (sym (`→-identityˡ (var 0F)))
-         (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
-          (sym (`×-comm (`⊤ `→ var 0F) `⊤))))
-        (trans (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤) (`⊤ `→ var 0F) `⊤)
-         (trans (`→-curry ((`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F))
-          (trans (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤) (refl `× `×-identityˡ `⊤) `→
-           refl)
-          `× `→-zeroʳ ((`⊤ `→ var 0F) `× `⊤))))
-       (trans
-        (`→-distribˡ-`× ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
-         ((`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤)
-        (trans
-         (`→-curry ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
-          ((`⊤ `→ var 0F) `× `⊤) (var 0F))
-         (trans
-          (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤
-           ((`⊤ `→ var 0F) `× `⊤))
-          (refl `× `×-identityˡ ((`⊤ `→ var 0F) `× `⊤))
-          `→ refl)
-         `× `→-zeroʳ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤))))
-      (trans
-       (`→-distribˡ-`×
-        (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
-        ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤ `→
-         var 0F)
-        `⊤)
-       (trans
-        (`→-curry
-         (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
-         ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤)
-         (var 0F))
-        (trans
-         (`×-assoc ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤
-          ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤))
-         (refl `×
-          `×-identityˡ
-          ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤))
-         `→ refl)
-        `×
-        `→-zeroʳ
-        (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤))))
-     (trans
-      ((refl `×
-        trans
-        (sym
-         (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) (`⊤ `→ var 0F) `⊤))
-        (trans
-         (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) (`⊤ `→ var 0F) `×
-          refl)
-         (`×-assoc (`⊤ `→ var 0F) (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤))
-        `→ refl)
-       `× refl)
-      (trans
-       (trans
-        (trans
-         (trans
-          (refl `×
-           sym
-           (`×-identityˡ
-            ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
-          (sym
-           (`×-assoc ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤
-            ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
-          `→ refl)
-         (sym
-          (`→-curry
-           (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
-           ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
-           (var 0F)))
-         `×
-         sym
-         (`→-zeroʳ
-          (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)))
-        (sym
-         (`→-distribˡ-`×
-          (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
-          ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤ `→
-           var 0F)
-          `⊤)))
-       (trans
-        (trans
-         (trans
-          (trans
-           (refl `×
-            trans (refl `× sym (`×-identityˡ `⊤))
-            (sym (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤)))
-           (sym (`×-assoc (`⊤ `→ var 1F) ((`⊤ `→ var 0F) `× `⊤) `⊤))
-           `→ refl)
-          (sym
-           (`→-curry ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F)))
-          `× sym (`→-zeroʳ ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤)))
-         (sym
-          (`→-distribˡ-`× ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤)
-           (`⊤ `→ var 0F) `⊤)))
-        (trans
-         (trans (refl `× sym (`×-identityˡ ((`⊤ `→ var 0F) `× `⊤)))
-          (sym (`×-assoc (`⊤ `→ var 1F) `⊤ ((`⊤ `→ var 0F) `× `⊤))))
-         (trans
-          (trans (`×-comm (`⊤ `→ var 1F) `⊤) (`×-identityˡ (`⊤ `→ var 1F)))
-          (`→-identityˡ (var 1F))
-          `×
-          trans
-          (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
-          (`→-identityˡ (var 0F)))
-         `→
-         trans
-         (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
-         (`→-identityˡ (var 0F)))
-        `→
-        trans
-        (trans
-         (trans
-          (trans
-           (refl `×
-            sym (`×-identityˡ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
-           (sym
-            (`×-assoc (`⊤ `→ var 0F) `⊤
-             ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
-           `→ refl)
-          (sym
-           (`→-curry ((`⊤ `→ var 0F) `× `⊤)
-            ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤) (var 0F)))
-          `× sym (`→-zeroʳ ((`⊤ `→ var 0F) `× `⊤)))
-         (sym
-          (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤)
-           ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤ `→ var 0F) `⊤)))
-        (trans
-         (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
-         (`→-identityˡ (var 0F))
-         `→
-         trans
-         (trans
-          (trans
-           (trans (refl `× sym (`×-identityˡ `⊤))
-            (sym (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤ `⊤))
-            `→ refl)
-           (sym
-            (`→-curry ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤) `⊤
-             (var 0F)))
-           `× sym (`→-zeroʳ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
-          (sym
-           (`→-distribˡ-`× ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
-            (`⊤ `→ var 0F) `⊤)))
-         (trans
-          (trans (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤)
-           (`×-identityˡ (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤))))
-          (trans (`→-identityˡ (`List ((`⊤ `→ var 1F) `× `⊤)))
-           (`List
-            (trans
-             (trans (`×-comm (`⊤ `→ var 1F) `⊤) (`×-identityˡ (`⊤ `→ var 1F)))
-             (`→-identityˡ (var 1F)))))
+         (trans (sym (`→-identityˡ (var 1F)))
+          (trans (sym (`×-identityˡ (`⊤ `→ var 1F)))
+           (sym (`×-comm (`⊤ `→ var 1F) `⊤)))
           `→
           trans
-          (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
-          (`→-identityˡ (var 0F))))))))
+          (trans (sym (`→-identityˡ (var 0F)))
+           (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
+            (sym (`×-comm (`⊤ `→ var 0F) `⊤)))
+           `→
+           trans (sym (`→-identityˡ (var 0F)))
+           (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
+            (sym (`×-comm (`⊤ `→ var 0F) `⊤))))
+          (trans (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤) (`⊤ `→ var 0F) `⊤)
+           (trans (`→-curry ((`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F))
+            (trans (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤) (refl `× `×-identityˡ `⊤) `→
+             refl)
+            `× `→-zeroʳ ((`⊤ `→ var 0F) `× `⊤))))
+         (trans
+          (`→-distribˡ-`× ((`⊤ `→ var 1F) `× `⊤)
+           ((`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤)
+          (trans
+           (`→-curry ((`⊤ `→ var 1F) `× `⊤) ((`⊤ `→ var 0F) `× `⊤) (var 0F))
+           (trans (`×-assoc (`⊤ `→ var 1F) `⊤ ((`⊤ `→ var 0F) `× `⊤))
+            (refl `× `×-identityˡ ((`⊤ `→ var 0F) `× `⊤))
+            `→ refl)
+           `× `→-zeroʳ ((`⊤ `→ var 1F) `× `⊤)))
+         `→
+         trans
+         (trans
+          (trans
+           (`List
+            (trans (sym (`→-identityˡ (var 1F)))
+             (trans (sym (`×-identityˡ (`⊤ `→ var 1F)))
+              (sym (`×-comm (`⊤ `→ var 1F) `⊤)))))
+           (sym (`→-identityˡ (`List ((`⊤ `→ var 1F) `× `⊤)))))
+          (trans (sym (`×-identityˡ (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤))))
+           (sym (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤)))
+          `→
+          trans
+          (trans (sym (`→-identityˡ (var 0F)))
+           (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
+            (sym (`×-comm (`⊤ `→ var 0F) `⊤)))
+           `→
+           trans (sym (`→-identityˡ (var 0F)))
+           (trans (sym (`×-identityˡ (`⊤ `→ var 0F)))
+            (sym (`×-comm (`⊤ `→ var 0F) `⊤))))
+          (trans (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤) (`⊤ `→ var 0F) `⊤)
+           (trans (`→-curry ((`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F))
+            (trans (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤) (refl `× `×-identityˡ `⊤) `→
+             refl)
+            `× `→-zeroʳ ((`⊤ `→ var 0F) `× `⊤))))
+         (trans
+          (`→-distribˡ-`× ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
+           ((`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤)
+          (trans
+           (`→-curry ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
+            ((`⊤ `→ var 0F) `× `⊤) (var 0F))
+           (trans
+            (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤
+             ((`⊤ `→ var 0F) `× `⊤))
+            (refl `× `×-identityˡ ((`⊤ `→ var 0F) `× `⊤))
+            `→ refl)
+           `× `→-zeroʳ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤))))
+        (trans
+         (`→-distribˡ-`×
+          (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
+          ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤ `→
+           var 0F)
+          `⊤)
+         (trans
+          (`→-curry
+           (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
+           ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤)
+           (var 0F))
+          (trans
+           (`×-assoc ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤
+            ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤))
+           (refl `×
+            `×-identityˡ
+            ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× (`⊤ `→ var 0F) `× `⊤))
+           `→ refl)
+          `×
+          `→-zeroʳ
+          (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤))))
+       (trans
+        ((refl `×
+          trans
+          (sym
+           (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) (`⊤ `→ var 0F) `⊤))
+          (trans
+           (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) (`⊤ `→ var 0F) `×
+            refl)
+           (`×-assoc (`⊤ `→ var 0F) (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤))
+          `→ refl)
+         `× refl)
+        (trans
+         (trans
+          (trans
+           (trans
+            (refl `×
+             sym
+             (`×-identityˡ
+              ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
+            (sym
+             (`×-assoc ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `⊤
+              ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
+            `→ refl)
+           (sym
+            (`→-curry
+             (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
+             ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
+             (var 0F)))
+           `×
+           sym
+           (`→-zeroʳ
+            (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)))
+          (sym
+           (`→-distribˡ-`×
+            (((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤ `→ var 0F) `× `⊤)
+            ((`⊤ `→ var 0F) `× (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤ `→
+             var 0F)
+            `⊤)))
+         (trans
+          (trans
+           (trans
+            (trans
+             (refl `×
+              trans (refl `× sym (`×-identityˡ `⊤))
+              (sym (`×-assoc (`⊤ `→ var 0F) `⊤ `⊤)))
+             (sym (`×-assoc (`⊤ `→ var 1F) ((`⊤ `→ var 0F) `× `⊤) `⊤))
+             `→ refl)
+            (sym
+             (`→-curry ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤) `⊤ (var 0F)))
+            `× sym (`→-zeroʳ ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤)))
+           (sym
+            (`→-distribˡ-`× ((`⊤ `→ var 1F) `× (`⊤ `→ var 0F) `× `⊤)
+             (`⊤ `→ var 0F) `⊤)))
+          (trans
+           (trans (refl `× sym (`×-identityˡ ((`⊤ `→ var 0F) `× `⊤)))
+            (sym (`×-assoc (`⊤ `→ var 1F) `⊤ ((`⊤ `→ var 0F) `× `⊤))))
+           (trans
+            (trans (`×-comm (`⊤ `→ var 1F) `⊤) (`×-identityˡ (`⊤ `→ var 1F)))
+            (`→-identityˡ (var 1F))
+            `×
+            trans
+            (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
+            (`→-identityˡ (var 0F)))
+           `→
+           trans
+           (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
+           (`→-identityˡ (var 0F)))
+          `→
+          trans
+          (trans
+           (trans
+            (trans
+             (refl `×
+              sym (`×-identityˡ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
+             (sym
+              (`×-assoc (`⊤ `→ var 0F) `⊤
+               ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
+             `→ refl)
+            (sym
+             (`→-curry ((`⊤ `→ var 0F) `× `⊤)
+              ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤) (var 0F)))
+            `× sym (`→-zeroʳ ((`⊤ `→ var 0F) `× `⊤)))
+           (sym
+            (`→-distribˡ-`× ((`⊤ `→ var 0F) `× `⊤)
+             ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤ `→ var 0F) `⊤)))
+          (trans
+           (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
+           (`→-identityˡ (var 0F))
+           `→
+           trans
+           (trans
+            (trans
+             (trans (refl `× sym (`×-identityˡ `⊤))
+              (sym (`×-assoc (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤ `⊤))
+              `→ refl)
+             (sym
+              (`→-curry ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤) `⊤
+               (var 0F)))
+             `× sym (`→-zeroʳ ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)))
+            (sym
+             (`→-distribˡ-`× ((`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `× `⊤)
+              (`⊤ `→ var 0F) `⊤)))
+           (trans
+            (trans (`×-comm (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤)) `⊤)
+             (`×-identityˡ (`⊤ `→ `List ((`⊤ `→ var 1F) `× `⊤))))
+            (trans (`→-identityˡ (`List ((`⊤ `→ var 1F) `× `⊤)))
+             (`List
+              (trans
+               (trans (`×-comm (`⊤ `→ var 1F) `⊤) (`×-identityˡ (`⊤ `→ var 1F)))
+               (`→-identityˡ (var 1F)))))
+            `→
+            trans
+            (trans (`×-comm (`⊤ `→ var 0F) `⊤) (`×-identityˡ (`⊤ `→ var 0F)))
+            (`→-identityˡ (var 0F))))))))
   _ = ≡.refl
 
   _ : _↔?_ ext itlist-sig fold_left-sig ρ ≡ just (record
