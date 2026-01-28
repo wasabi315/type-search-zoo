@@ -1,6 +1,6 @@
 # Rittri89-egraph
 
-Like [Rittri89](../Rittri89), but implemented using (slotted) e-graphs so it also emits isomorphism proofs.
+Like [Rittri89](../Rittri89), but implemented using (slotted) e-graphs and made to emit isomorphism proofs.
 
 ```math
 \begin{align*}
