@@ -377,6 +377,7 @@ name = "rittri89-egraph"
 version = "0.1.0"
 dependencies = [
  "easy-repl",
+ "rayon",
  "slotted-egraphs",
 ]
 

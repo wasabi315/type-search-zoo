@@ -2,16 +2,24 @@
 
 Like [Rittri89](../Rittri89), but implemented using (slotted) e-graphs and made to emit isomorphism proofs.
 
-```math
-\begin{align*}
-  A \times (B \times C) & = (A \times B) \times C \\
-  A \times B & = B \times A \\
-  A \times 1 & = A \\
-  A \rightarrow (B \rightarrow C) & = (A \times B) \rightarrow C \\
-  1 \rightarrow A & = A \\
-  A \rightarrow (B \times C) & = (A \rightarrow B) \times (A \rightarrow C) \\
-  A \rightarrow 1 & = 1
-\end{align*}
+```rust
+fn make_rules() -> Vec<Rewrite<Type, ()>> {
+    vec![
+        rw!("*-comm";                  "(* ?a ?b)" => "(* ?b ?a)"               ),
+        rw!("*-idl";                    "(* 1 ?a)" => "?a"                      ),
+        rw!("*-idr";                    "(* ?a 1)" => "?a"                      ),
+        rw!("→-idl";                    "(→ 1 ?a)" => "?a"                      ),
+        rw!("→-zeror";                  "(→ ?a 1)" => "1"                       ),
+        rw!("→-swap";           "(→ ?a (→ ?b ?c))" => "(→ ?b (→ ?a ?c))"        ),
+        rw!("*-assoc";          "(* (* ?a ?b) ?c)" => "(* ?a (* ?b ?c))"        ),
+        rw!("*-unassoc";        "(* ?a (* ?b ?c))" => "(* (* ?a ?b) ?c)"        ),
+        rw!("curry";            "(→ (* ?a ?b) ?c)" => "(→ ?a (→ ?b ?c))"        ),
+        rw!("uncurry";          "(→ ?a (→ ?b ?c))" => "(→ (* ?a ?b) ?c)"        ),
+        rw!("distrib";          "(→ ?a (* ?b ?c))" => "(* (→ ?a ?b) (→ ?a ?c))" ),
+        rw!("undistrib"; "(* (→ ?a ?b) (→ ?a ?c))" => "(→ ?a (* ?b ?c))"        ),
+        rw!("∀-swap";        "(∀ $1 (∀ $2 ?body))" => "(∀ $2 (∀ $1 ?body))"     ),
+    ]
+}
 ```
 
 `cargo run -- signature.txt` to try it out.

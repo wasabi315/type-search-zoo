@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use slotted_egraphs::*;
 
 define_language! {
@@ -32,31 +33,28 @@ fn make_rules() -> Vec<Rewrite<Type, ()>> {
     ]
 }
 
+fn check_equivalence(ty1: RecExpr<Type>, ty2: RecExpr<Type>) -> Option<String> {
+    let mut egraph = EGraph::new(());
+    let id1 = egraph.add_expr(ty1.clone());
+    let id2 = egraph.add_expr(ty2.clone());
+    run_eqsat(&mut egraph, make_rules(), 10, 60, |_| Ok(()));
+    if egraph.eq(&id1, &id2) {
+        let proof = egraph.explain_equivalence(ty1, ty2);
+        Some(proof.to_flat_string(&egraph))
+    } else {
+        None
+    }
+}
+
 fn search(
     heystack: &HashMap<String, RecExpr<Type>>,
     needle: RecExpr<Type>,
 ) -> HashMap<String, (RecExpr<Type>, String)> {
-    let mut egraph = EGraph::new(());
-
-    let name_to_id: HashMap<String, (AppliedId, RecExpr<Type>)> = heystack
-        .iter()
-        .map(|(name, ty)| {
-            let id = egraph.add_expr(ty.clone());
-            (name.clone(), (id, ty.clone()))
-        })
-        .collect();
-
-    let needle_id = egraph.add_expr(needle.clone());
-
-    run_eqsat(&mut egraph, make_rules(), 30, 60, |_| Ok(()));
-
-    name_to_id
-        .into_iter()
-        .filter_map(|(name, (id, hey))| {
-            egraph.eq(&id, &needle_id).then(|| {
-                let proof = egraph.explain_equivalence(hey.clone(), needle.clone());
-                (name, (hey, proof.to_flat_string(&egraph)))
-            })
+    heystack
+        .par_iter()
+        .filter_map(|(name, hey)| {
+            check_equivalence(hey.clone(), needle.clone())
+                .map(|proof_str| (name.clone(), (hey.clone(), proof_str)))
         })
         .collect()
 }
@@ -93,7 +91,7 @@ fn main() {
             easy_repl::command! {
                 "Search library items by query type",
                 (ty: String) => |ty: String| {
-                    let ty = RecExpr::parse(ty.trim()).unwrap();
+                    let ty = parse_ty(&ty);
                     let matches = search(&signatures, ty);
                     for (name, (ty, proof)) in matches {
                         println!("{name}: {ty}\n\nExplanation:\n{proof}\n");
