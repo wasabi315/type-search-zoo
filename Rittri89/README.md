@@ -24,8 +24,8 @@ The search features are the following:
 
 ```text
 > (x * y -> y) -> [x] -> y -> y
-foldr : (a -> b -> b) -> b -> [a] -> b
-foldl : (b -> a -> b) -> b -> [a] -> b
+foldr : forall a b. (a -> b -> b) -> b -> [a] -> b
+foldl : forall a b. (b -> a -> b) -> b -> [a] -> b
 ```
 
 `stack run -- signatures.txt` to try it out.

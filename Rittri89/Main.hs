@@ -11,7 +11,6 @@ import Data.MultiSet (MultiSet)
 import Data.MultiSet qualified as MS
 import Data.Set (Set)
 import Data.Set qualified as S
-import Data.String
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
@@ -32,6 +31,9 @@ infixr 4 `Arr`
 
 type Name = Text
 
+data Scheme = Scheme [Name] Ty
+  deriving stock (Show)
+
 data Ty
   = Var Name -- x
   | Unit -- ()
@@ -40,33 +42,28 @@ data Ty
   | List Ty -- [t]
   deriving stock (Show)
 
-instance IsString Ty where
-  fromString x = Var (T.pack x)
-
-varSet :: Ty -> Set Name
-varSet = \case
+freeVarSet :: Ty -> Set Name
+freeVarSet = \case
   Var x -> S.singleton x
   Unit -> S.empty
-  a `Prod` b -> varSet a <> varSet b
-  a `Arr` b -> varSet a <> varSet b
-  List a -> varSet a
+  a `Prod` b -> freeVarSet a <> freeVarSet b
+  a `Arr` b -> freeVarSet a <> freeVarSet b
+  List a -> freeVarSet a
+
+closeTy :: Ty -> Scheme
+closeTy a = Scheme xs a
+  where
+    xs = S.toList $ freeVarSet a
 
 type Rename = Map Name Name
 
-possibleRenamings :: Ty -> Ty -> [Rename]
-possibleRenamings a b = do
-  let avars = S.toList $ varSet a
-      bvars = S.toList $ varSet b
-  guard $ length avars == length bvars
-  M.fromList . flip zip avars <$> permutations bvars
-
 rename :: Rename -> Ty -> Ty
-rename r = \case
-  Var x -> Var $ r M.! x
+rename ren = \case
+  Var x -> Var (ren M.! x)
   Unit -> Unit
-  a `Prod` b -> rename r a `Prod` rename r b
-  a `Arr` b -> rename r a `Arr` rename r b
-  List a -> List $ rename r a
+  a `Prod` b -> rename ren a `Prod` rename ren b
+  a `Arr` b -> rename ren a `Arr` rename ren b
+  List a -> List (rename ren a)
 
 --------------------------------------------------------------------------------
 -- Main algorithm
@@ -91,23 +88,17 @@ rename r = \case
 
 infixr 5 `nfProd`
 
-infix 4 `FArr`
-
-infix 4 `nfArr'`
-
-infixr 4 `nfArr`
+infix 4 `FArr`, `nfArr'`, `nfArr`
 
 data Atom
   = AVar Name
   | AList NF
   deriving stock (Show, Eq, Ord)
 
-data Factor = NF `FArr` !Atom
+data Factor = NF `FArr` Atom
   deriving stock (Show, Eq, Ord)
 
 type NF = MultiSet Factor
-
--- It is possible to directly reduce types into NF!
 
 nfAtom :: Atom -> NF
 nfAtom a = MS.singleton (nfUnit `FArr` a)
@@ -132,6 +123,7 @@ a `nfArr'` (e `FArr` b) = (a <> e) `FArr` b
 nfArr :: NF -> NF -> NF
 a `nfArr` b = MS.map (nfArr' a) b
 
+-- Normalise type into NF
 reduce :: Ty -> NF
 reduce = \case
   Var x -> nfVar x
@@ -140,12 +132,24 @@ reduce = \case
   a `Arr` b -> reduce a `nfArr` reduce b
   List a -> nfList (reduce a)
 
--- Entrypoint: check if two types are equal modulo the axioms and α-equivalence
-equiv :: Ty -> Ty -> Bool
-equiv a b =
-  let a' = reduce a
-      rs = possibleRenamings a b
-   in any (\r -> a' == reduce (rename r b)) rs
+-- check if two types are equal modulo the axioms and α-equivalence
+equiv :: Scheme -> Scheme -> Bool
+equiv (Scheme xs _) (Scheme ys _)
+  -- check the schemes bind the same number of variables
+  | length xs /= length ys = False
+equiv (Scheme xs a) (Scheme ys b) =
+  any (\ren -> a' == reduce (rename ren b)) rens
+  where
+    a' = reduce a
+    -- possible renamings
+    rens = M.fromList . flip zip xs <$> permutations ys
+
+-- entrypoint
+search :: [(Name, Scheme)] -> Scheme -> [(Name, Scheme)]
+search sigs query =
+  filter
+    (\(_, sig) -> equiv sig query)
+    sigs
 
 --------------------------------------------------------------------------------
 -- Parsing
@@ -183,11 +187,20 @@ pProd = foldr1 Prod <$> pAtom `sepBy1` symbol "*"
 pTy :: Parser Ty
 pTy = foldr1 Arr <$> pProd `sepBy1` symbol "->"
 
+pScheme :: Parser Scheme
+pScheme = do
+  xs <- option [] do
+    _ <- symbol "forall"
+    xs <- many pName
+    _ <- symbol "."
+    pure xs
+  Scheme xs <$> pTy
+
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
 parseTy = parse (pTy <* eof) ""
 
-parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Ty)]
-parseSigs path = flip parse path $ many ((,) <$> pName <*> (symbol ":" *> pTy)) <* eof
+parseSigs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [(Name, Scheme)]
+parseSigs path = flip parse path $ many ((,) <$> pName <*> (symbol ":" *> pScheme)) <* eof
 
 prettyTy :: Int -> Ty -> ShowS
 prettyTy p = \case
@@ -196,6 +209,13 @@ prettyTy p = \case
   a `Prod` b -> showParen (p > 5) $ prettyTy 6 a . showString " * " . prettyTy 5 b
   a `Arr` b -> showParen (p > 4) $ prettyTy 5 a . showString " -> " . prettyTy 4 b
   List a -> showString "[" . prettyTy 0 a . showString "]"
+
+prettyScheme :: Scheme -> ShowS
+prettyScheme (Scheme xs a) =
+  showString "forall"
+    . foldr ((.) . (showChar ' ' .) . showString . T.unpack) id xs
+    . showString ". "
+    . prettyTy 0 a
 
 --------------------------------------------------------------------------------
 
@@ -219,8 +239,8 @@ main = do
         Just ":h" -> outputStrLn helpText >> loop
         Just input -> case parseTy (T.pack input) of
           Left e -> outputStrLn (displayException e) >> loop
-          Right query -> do
-            forM_ sigs \(x, a) -> do
-              when (equiv query a) do
-                outputStrLn $ T.unpack x ++ " : " ++ prettyTy 0 a ""
+          Right (closeTy -> query) -> do
+            let matches = search sigs query
+            forM_ matches \(x, a) -> do
+              outputStrLn $ T.unpack x ++ " : " ++ prettyScheme a ""
             loop
