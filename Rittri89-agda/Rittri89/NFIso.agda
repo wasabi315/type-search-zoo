@@ -1,203 +1,321 @@
 module Rittri89.NFIso where
 
-open import Level using (Level) renaming (zero to ℓ-zero)
-open import Axiom.Extensionality.Propositional using (Extensionality)
+open import Data.Bool.Base using (false; true)
 open import Data.Fin.Base using (Fin)
 import Data.Fin.Properties as Fin
-open import Data.Nat.Base using (ℕ)
-open import Data.List.Properties using (++-assoc; ++-identityʳ)
-import Data.List.Relation.Binary.Permutation.Homogeneous as ↭
-import Data.List.Relation.Binary.Pointwise as =̇
-open import Data.Product.Base using (_×_; _,_; proj₁; proj₂; uncurry)
-open import Data.Product.Algebra using (×-cong; ×-comm; ×-assoc; ×-identityˡ)
-open import Data.Unit.Polymorphic.Base using (⊤; tt)
-open import Function.Bundles using (Inverse; _↔_; mk↔ₛ′)
-open import Function.Properties.Inverse using (↔-refl; ↔-sym; ↔-trans)
-open import Function.Properties using (→-cong-↔)
+open import Data.Nat.Base using (ℕ; suc; zero; 2+)
+open import Data.Nat.Properties as ℕ using (suc-injective)
+open import Data.Product.Base as × using (∃-syntax; ∃₂; _×_; _,_)
+open import Function.Base using (_∘_)
 open import Relation.Binary.Bundles using (Setoid; DecSetoid)
-open import Relation.Binary.PropositionalEquality.Core as ≡ using (_≡_)
 open import Relation.Binary.Structures using (IsEquivalence; IsDecEquivalence)
-open import Relation.Nullary.Decidable.Core as Dec using (Dec; _×-dec_; no)
+open import Relation.Binary.PropositionalEquality.Core as ≡ using (_≡_)
+open import Relation.Nullary.Negation.Core using (¬_; contradiction; contraposition)
+open import Relation.Nullary.Decidable.Core as Dec using (Dec; yes; no; _because_; _×-dec_)
+open import Relation.Nullary.Reflects using (invert)
 
-open import Rittri89.Type using (Ctx⟦_⟧)
-open import Rittri89.TypeIso using (List-cong)
 open import Rittri89.NF
 
 private
   variable
-    ℓ ℓ' : Level
     n : ℕ
     x y : Fin n
-    α β γ : Atom n
-    ε φ ψ θ : Factor n
-    ν μ ι σ τ : NF n
+    s : Sort
+    α β γ δ α′ β′ γ′ : NF n s
 
-infix  4 _≅ᵃ_ _≅ᶠ_ _≟ᵃ_ _≟ᶠ_
-infixr 5 _`→_
+infix  4 _≅_ _≟_ _≋_
+infixr 5 _▶_ _▶′_
+infixr 6 _∷_ _∷′_
+
+--------------------------------------------------------------------------------
+
+data _≅_ {n} : NF n s → NF n s → Set where
+  -- Equivalence
+  refl  : α ≅ α
+  trans : {α β γ : Product n} → (p : α ≅ β) (q : β ≅ γ) → α ≅ γ
+
+  -- Congruence
+  list : (p : α ≅ β) → list α ≅ list β
+  _▶_  : (p : α ≅ β) (q : γ ≅ δ) → α ▶ γ ≅ β ▶ δ
+  _∷_  : (p : α ≅ β) (q : γ ≅ δ) → α ∷ γ ≅ β ∷ δ
+
+  -- Permutation
+  swap : (p : α ≅ α′) (q : β ≅ β′) (r : γ ≅ γ′) → α ∷ β ∷ γ ≅ β′ ∷ α′ ∷ γ′
+
+pattern _▶- {n} {s} {α} {β} {γ} p = _▶_ {n} {s} {α} {β} p (refl {α = γ})
+pattern -▶_ {n} {s} {α} {β} {γ} p = _▶_ {n} {s} {γ = β} {δ = γ} (refl {α = α}) p
+pattern _∷- {n} {s} {α} {β} {γ} p = _∷_ {n} {s} {α} {β} p (refl {α = γ})
+pattern -∷_ {n} {s} {α} {β} {γ} p = _∷_ {n} {s} {γ = β} {δ = γ} (refl {α = α}) p
+
+sym : α ≅ β → β ≅ α
+sym refl         = refl
+sym (trans p q)  = trans (sym q) (sym p)
+sym (list p)     = list (sym p)
+sym (p ▶ q)      = sym p ▶ sym q
+sym (p ∷ q)      = sym p ∷ sym q
+sym (swap p q r) = swap (sym q) (sym p) (sym r)
+
+trans′ : {α β γ : NF n s} → α ≅ β → β ≅ γ → α ≅ γ
+trans′ refl     q         = q
+trans′ p        refl      = p
+trans′ (list p) (list q)  = list (trans′ p q)
+trans′ (p ▶ q)  (p′ ▶ q′) = trans′ p p′ ▶ trans′ q q′
+trans′ {s = product} p q  = trans p q
+
+_▶′_ : α ≅ β → γ ≅ δ → α ▶ γ ≅ β ▶ δ
+refl ▶′ refl = refl
+p    ▶′ q    = p ▶ q
+
+_∷′_ : α ≅ β → γ ≅ δ → α ∷ γ ≅ β ∷ δ
+refl ∷′ refl = refl
+p    ∷′ q    = p ∷ q
+
+#′_ : x ≡ y → # x ≅ # y
+#′ ≡.refl = refl
+
+list′ : α ≅ β → list α ≅ list β
+list′ refl = refl
+list′ p    = list p
+
+↑′_ : α ≅ β → ↑ α ≅ ↑ β
+↑′ p = refl ▶′ p
+
+⇑′_ : ∀ {s} {α β : NF n s} → α ≅ β → ⇑ α ≅ ⇑ β
+⇑′_ {s = atom}    p = (refl ▶′ p) ∷′ refl
+⇑′_ {s = factor}  p = p ∷′ refl
+⇑′_ {s = product} p = p
 
 --------------------------------------------------------------------------------
 
-data _≅ᵃ_ {n} : (α β : Atom n) → Set
-data _≅ᶠ_ {n} : (φ ψ : Factor n) → Set
+_*- : {α β γ : Product n} → α ≅ β → α * γ ≅ β * γ
+refl       *- = refl
+trans p q  *- = trans′ (p *-) (q *-)
+(p ∷ q)    *- = p ∷ (q *-)
+swap p q r *- = swap p q (r *-)
 
-_≟ᵃ_ : (α β : Atom n) → Dec (α ≅ᵃ β)
-_≟ᶠ_ : (φ ψ : Factor n) → Dec (φ ≅ᶠ ψ)
+-*_ : {α β γ : Product n} → β ≅ γ → α * β ≅ α * γ
+-*_ {α = unit}  p = p
+-*_ {α = α ∷ β} p = refl ∷′ (-* p)
 
-{-# TERMINATING #-} -- Uh oh
-isEquivalenceᵃ : ∀ n → IsEquivalence (_≅ᵃ_ {n = n})
-isEquivalenceᶠ : ∀ n → IsEquivalence (_≅ᶠ_ {n = n})
+_*′_ : {α β : NF n s} {γ δ : Product n} → α ≅ β → γ ≅ δ → α * γ ≅ β * δ
+_*′_ {s = atom}    p q = (↑′ p) ∷′ q
+_*′_ {s = factor}  p q = p ∷′ q
+_*′_ {s = product} p q = trans′ (p *-) (-* q)
 
-isDecEquivalenceᵃ : ∀ n → IsDecEquivalence (_≅ᵃ_ {n = n})
-isDecEquivalenceᶠ : ∀ n → IsDecEquivalence (_≅ᶠ_ {n = n})
+_⇒- : {α β : Product n} {γ : NF n s} → α ≅ β → α ⇒ γ ≅ β ⇒ γ
+_⇒- {s = atom} p = p ▶′ refl
+_⇒- {s = factor} {γ = _ ▶ _} p = (p *′ refl) ▶′ refl
+_⇒- {s = product} {γ = unit}  p = refl
+_⇒- {s = product} {γ = _ ∷ _} p = (p ⇒-) ∷′ (p ⇒-)
 
-isDecEquivalenceᵃ n = record { isEquivalence = isEquivalenceᵃ n ; _≟_ = _≟ᵃ_ }
-isDecEquivalenceᶠ n = record { isEquivalence = isEquivalenceᶠ n ; _≟_ = _≟ᶠ_ }
+-⇒_ : {α : Product n} {β γ : NF n s} → β ≅ γ → α ⇒ β ≅ α ⇒ γ
+-⇒ refl       = refl
+-⇒ trans p q  = trans′ (-⇒ p) (-⇒ q)
+-⇒ list p     = refl ▶′ list p
+-⇒ (p ▶ q)    = (refl *′ p) ▶′ q
+-⇒ (p ∷ q)    = (-⇒ p) ∷′ (-⇒ q)
+-⇒ swap p q r = swap (-⇒ p) (-⇒ q) (-⇒ r)
 
-decSetoidᵃ : ℕ → DecSetoid ℓ-zero ℓ-zero
-decSetoidᵃ n = record { _≈_ = _≅ᵃ_ ; isDecEquivalence = isDecEquivalenceᵃ n }
+_⇒′_ : {α β : Product n} {γ δ : NF n s} → α ≅ β → γ ≅ δ → α ⇒ γ ≅ β ⇒ δ
+_⇒′_ {s = atom} p q = p ▶′ q
+_⇒′_ {s = factor} {γ = _ ▶ _} {δ = _ ▶ _} p refl    = (p *-) ▶′ refl
+_⇒′_ {s = factor} {γ = _ ▶ _} {δ = _ ▶ _} p (q ▶ r) = (p *′ q) ▶′ r
+_⇒′_ {s = product} p q = trans′ (p ⇒-) (-⇒ q)
 
-decSetoidᶠ : ℕ → DecSetoid ℓ-zero ℓ-zero
-decSetoidᶠ n = record { _≈_ = _≅ᶠ_ ; isDecEquivalence = isDecEquivalenceᶠ n }
+¬unit≅cons : ¬ unit ≅ α ∷ β
+¬unit≅cons (trans {β = unit}  p q) = ¬unit≅cons q
+¬unit≅cons (trans {β = α ∷ β} p q) = ¬unit≅cons p
 
-module _ {n : ℕ} where
-  import Data.List.Relation.Binary.Permutation.Setoid (DecSetoid.setoid (decSetoidᶠ n)) as Permutation
-  open Permutation public
-    using ()
-    renaming (_↭_ to infix 4 _≅ⁿ_;
-              ↭-refl to reflⁿ; ↭-reflexive to reflexiveⁿ; ↭-sym to symⁿ; ↭-trans to transⁿ;
-              ↭-swap to swapⁿ)
-  open import Data.List.Relation.Binary.Permutation.Setoid.Properties (DecSetoid.setoid (decSetoidᶠ n)) public
-    using ()
-    renaming (++⁺ to ∪-cong; ++-comm to ∪-comm)
+*-strictIdentityˡ : (α : Product n) → unit * α ≡ α
+*-strictIdentityˡ _ = ≡.refl
 
-  infixr 6 _`×_ _`×′_
+*-identityˡ : (α : Product n) → unit * α ≅ α
+*-identityˡ _ = refl
 
-  pattern _`×_ φ≅ψ ν≅μ = Permutation.prep φ≅ψ ν≅μ
+*-strictIdentityʳ : (α : Product n) → α * unit ≡ α
+*-strictIdentityʳ unit     = ≡.refl
+*-strictIdentityʳ (α ∷ α′) = ≡.cong (α ∷_) (*-strictIdentityʳ α′)
 
-  _`×′_ : φ ≅ᶠ ψ → ν ≅ⁿ μ → φ `× ν ≅ⁿ ψ `× μ
-  _`×′_ = _`×_
+*-identityʳ : (α : Product n) → α * unit ≅ α
+*-identityʳ unit     = refl
+*-identityʳ (α ∷ α′) = refl ∷′ *-identityʳ α′
 
-isEquivalenceⁿ : ∀ n → IsEquivalence (_≅ⁿ_ {n = n})
-isEquivalenceⁿ n = record { refl = reflⁿ ; sym = symⁿ ; trans = transⁿ }
+shift : α ≅ β → (γ δ : Product n) → α ∷ γ * δ ≅ γ * β ∷ δ
+shift p unit     δ = p ∷′ refl
+shift p (γ ∷ γs) δ = trans′ (swap p refl refl) (refl ∷′ shift refl γs δ)
 
-data _≅ᵃ_ where
-  var   : (x≡y : x ≡ y) → var x ≅ᵃ var y
-  `List : (ν≅μ : ν ≅ⁿ μ) → `List ν ≅ᵃ `List μ
+*-comm : (α β : Product n) → α * β ≅ β * α
+*-comm unit     β = sym (*-identityʳ β)
+*-comm (α ∷ α′) β = trans′ (refl ∷′ *-comm α′ β) (shift refl β α′)
 
-data _≅ᶠ_ where
-  _`→_ : (ν≅μ : ν ≅ⁿ μ) (α≅β : α ≅ᵃ β) → ν `→ α ≅ᶠ μ `→ β
+*-strictAssoc : (α β γ : Product n) → (α * β) * γ ≡ α * (β * γ)
+*-strictAssoc unit     β γ = ≡.refl
+*-strictAssoc (α ∷ α′) β γ = ≡.cong (α ∷_) (*-strictAssoc α′ β γ)
 
-reflᵃ : α ≅ᵃ α
-reflᶠ : φ ≅ᶠ φ
+*-assoc : (α β γ : Product n) → (α * β) * γ ≅ α * (β * γ)
+*-assoc unit     β γ = refl
+*-assoc (α ∷ α′) β γ = refl ∷′ *-assoc α′ β γ
 
-reflᵃ {α = var x}   = var ≡.refl
-reflᵃ {α = `List ν} = `List reflⁿ
-reflᶠ {φ = ν `→ α}  = reflⁿ `→ reflᵃ
+⇒-identityˡ : (α : Product n) → α ≅ unit ⇒ α
+⇒-identityˡ unit          = refl
+⇒-identityˡ ((_ ▶ _) ∷ α) = refl ∷′ ⇒-identityˡ α
 
-symᵃ : α ≅ᵃ β → β ≅ᵃ α
-symᶠ : φ ≅ᶠ ψ → ψ ≅ᶠ φ
+uncurry : (α β γ : Product n) → α ⇒ (β ⇒ γ) ≅ (α * β) ⇒ γ
+uncurry α β unit           = refl
+uncurry α β ((γ ▶ γ′) ∷ δ) = trans′ ((sym (*-assoc α β γ) ▶′ refl) ∷′ refl) (refl ∷′ uncurry α β δ)
 
-symᵃ (var x≡y)    = var (≡.sym x≡y)
-symᵃ (`List ν≅μ)  = `List (symⁿ ν≅μ)
-symᶠ (ν≅μ `→ α≅β) = symⁿ ν≅μ `→ symᵃ α≅β
+⇒-zeroʳ : (α : Product n) → α ⇒ unit ≅ unit
+⇒-zeroʳ _ = refl
 
-transᵃ : α ≅ᵃ β → β ≅ᵃ γ → α ≅ᵃ γ
-transᶠ : {φ ψ θ : Factor n} → φ ≅ᶠ ψ → ψ ≅ᶠ θ → φ ≅ᶠ θ
-
-transᵃ (var x≡y)    (var y≡z)    = var (≡.trans x≡y y≡z)
-transᵃ (`List ν≅μ)  (`List μ≅ι)  = `List (transⁿ ν≅μ μ≅ι)
-transᶠ (ν≅μ `→ α≅β) (ρ≅σ `→ β≅γ) = transⁿ ν≅μ ρ≅σ `→ transᵃ α≅β β≅γ
-
-isEquivalenceᵃ n = record { refl = reflᵃ ; sym = symᵃ ; trans = transᵃ }
-isEquivalenceᶠ n = record { refl = reflᶠ ; sym = symᶠ ; trans = transᶠ }
-
-var-injective : var x ≅ᵃ var y → x ≡ y
-var-injective (var x≡y) = x≡y
-
-`List-injective : `List ν ≅ᵃ `List μ → ν ≅ⁿ μ
-`List-injective (`List ν≅μ) = ν≅μ
-
-`→-injective : ν `→ α ≅ᶠ μ `→ β → ν ≅ⁿ μ × α ≅ᵃ β
-`→-injective (ν≅μ `→ α≅β) = ν≅μ , α≅β
-
--- Up to propositional equality
-∪-identityʳ : (ν : NF n) → ν ∪ `⊤ ≡ ν
-∪-identityʳ = ++-identityʳ
-
--- Up to propositional equality
-∪-assoc : (ν μ ι : NF n) → (ν ∪ μ) ∪ ι ≡ ν ∪ (μ ∪ ι)
-∪-assoc = ++-assoc
-
-`→ᶠ-cong : ν ≅ⁿ μ → φ ≅ᶠ ψ → ν `→ᶠ φ ≅ᶠ μ `→ᶠ ψ
-`→ᶠ-cong ν≅μ (ι≅σ `→ α≅β) = ∪-cong ν≅μ ι≅σ `→ α≅β
-
-`→ⁿ-cong : ν ≅ⁿ μ → ι ≅ⁿ σ → ν `→ⁿ ι ≅ⁿ μ `→ⁿ σ
-`→ⁿ-cong ν≅μ (↭.refl ι≋σ)         = =̇.rec (λ {ι} {σ} _ → _ `→ⁿ ι ≅ⁿ _ `→ⁿ σ) (λ φ≅ψ → ↭.prep (`→ᶠ-cong ν≅μ φ≅ψ)) reflⁿ ι≋σ
-`→ⁿ-cong ν≅μ (↭.prep φ≅ψ ι≅σ)     = ↭.prep (`→ᶠ-cong ν≅μ φ≅ψ) (`→ⁿ-cong ν≅μ ι≅σ)
-`→ⁿ-cong ν≅μ (↭.swap φ≅ψ ε≅θ ι≅σ) = ↭.trans (↭.prep (`→ᶠ-cong ν≅μ φ≅ψ) (↭.prep (`→ᶠ-cong ν≅μ ε≅θ) (`→ⁿ-cong ν≅μ ι≅σ))) (↭.swap reflᶠ reflᶠ reflⁿ)
-`→ⁿ-cong ν≅μ (↭.trans ι≅σ σ≅τ)    = ↭.trans (`→ⁿ-cong ν≅μ ι≅σ) (`→ⁿ-cong reflⁿ σ≅τ)
-
-`→ᶠ-identityˡ : (φ : Factor n) → `⊤ `→ᶠ φ ≅ᶠ φ
-`→ᶠ-identityˡ (ν `→ α) = reflᶠ
-
-`→ⁿ-identityˡ : (ν : NF n) → `⊤ `→ⁿ ν ≅ⁿ ν
-`→ⁿ-identityˡ `⊤       = reflⁿ
-`→ⁿ-identityˡ (φ `× ν) = `→ᶠ-identityˡ φ `×′ `→ⁿ-identityˡ ν
-
-`→ᶠ-curry : (ν μ : NF n) (φ : Factor n) → ν `→ᶠ (μ `→ᶠ φ) ≅ᶠ (ν ∪ μ) `→ᶠ φ
-`→ᶠ-curry ν μ (ι `→ α) = reflexiveⁿ (≡.sym (∪-assoc ν μ ι)) `→ reflᵃ
-
-`→ⁿ-curry : (ν μ ι : NF n) → ν `→ⁿ (μ `→ⁿ ι) ≅ⁿ (ν ∪ μ) `→ⁿ ι
-`→ⁿ-curry ν μ `⊤       = reflⁿ
-`→ⁿ-curry ν μ (φ `× ι) = `→ᶠ-curry ν μ φ `×′ `→ⁿ-curry ν μ ι
-
-`→ⁿ-distribˡ-∪ : (ν μ ι : NF n) → ν `→ⁿ (μ ∪ ι) ≅ⁿ (ν `→ⁿ μ) ∪ (ν `→ⁿ ι)
-`→ⁿ-distribˡ-∪ ν `⊤       ι = reflⁿ
-`→ⁿ-distribˡ-∪ ν (φ `× μ) ι = reflᶠ `×′ `→ⁿ-distribˡ-∪ ν μ ι
+distrib : (α β γ : Product n) → α ⇒ (β * γ) ≅ (α ⇒ β) * (α ⇒ γ)
+distrib α unit     γ = refl
+distrib α (β ∷ β′) γ = refl ∷′ distrib α β′ γ
 
 --------------------------------------------------------------------------------
--- Decision procedure
 
-module _ {n : ℕ} where
-  open import Data.List.Relation.Binary.Permutation.Setoid.DecisionProcedure (decSetoidᶠ n) public
-    using ()
-    renaming (permutation? to infix 4 _≟ⁿ_)
+#-injective : # x ≅ # y → x ≡ y
+#-injective refl = ≡.refl
 
-var x   ≟ᵃ var y   = Dec.map′ var var-injective (x Fin.≟ y)
-`List ν ≟ᵃ `List μ = Dec.map′ `List `List-injective (ν ≟ⁿ μ)
-var x   ≟ᵃ `List ν = no λ ()
-`List ν ≟ᵃ var x   = no λ ()
+list-injective : list α ≅ list β → α ≅ β
+list-injective refl     = refl
+list-injective (list p) = p
 
-ν `→ α ≟ᶠ μ `→ β = Dec.map′ (uncurry _`→_) `→-injective (ν ≟ⁿ μ ×-dec α ≟ᵃ β)
+▶-injective : (α ▶ γ) ≅ (β ▶ δ) → (α ≅ β) × (γ ≅ δ)
+▶-injective refl    = refl , refl
+▶-injective (p ▶ q) = p , q
 
-isDecEquivalenceⁿ : ∀ n → IsDecEquivalence (_≅ⁿ_ {n = n})
-isDecEquivalenceⁿ n = record { isEquivalence = isEquivalenceⁿ n ; _≟_ = _≟ⁿ_ }
+α≅β⇒|α|≡|β| : α ≅ β → length α ≡ length β
+α≅β⇒|α|≡|β| refl         = ≡.refl
+α≅β⇒|α|≡|β| (trans p q)  = ≡.trans (α≅β⇒|α|≡|β| p) (α≅β⇒|α|≡|β| q)
+α≅β⇒|α|≡|β| (p ∷ q)      = ≡.cong suc (α≅β⇒|α|≡|β| q)
+α≅β⇒|α|≡|β| (swap p q r) = ≡.cong 2+ (α≅β⇒|α|≡|β| r)
 
-decSetoidⁿ : ℕ → DecSetoid ℓ-zero ℓ-zero
-decSetoidⁿ n = record { _≈_ = _≅ⁿ_ ; isDecEquivalence = isDecEquivalenceⁿ n }
+data _≋_ {n} : Product n → Product n → Set where
+  unit : unit ≋ unit
+  _∷_  : (p : α ≅ β) (q : γ ≋ δ) → α ∷ γ ≋ β ∷ δ
+
+≋-refl : α ≋ α
+≋-refl {α = unit}  = unit
+≋-refl {α = α ∷ β} = refl ∷ ≋-refl
+
+≋⇒≅ : α ≋ β → α ≅ β
+≋⇒≅ unit    = refl
+≋⇒≅ (p ∷ q) = p ∷′ ≋⇒≅ q
+
+trans-≋ˡ : α ≋ β → β ≅ γ → α ≅ γ
+trans-≋ˡ p           refl         = ≋⇒≅ p
+trans-≋ˡ p           (trans q r)  = trans′ (trans-≋ˡ p q) r
+trans-≋ˡ (p ∷ q)     (r ∷ s)      = trans′ p r ∷′ trans-≋ˡ q s
+trans-≋ˡ (p ∷ q ∷ r) (swap s t u) = swap (trans′ p s) (trans′ q t) (trans-≋ˡ r u)
+
+trans-≋ʳ : α ≅ β → β ≋ γ → α ≅ γ
+trans-≋ʳ refl         q           = ≋⇒≅ q
+trans-≋ʳ (trans p q)  r           = trans′ p (trans-≋ʳ q r)
+trans-≋ʳ (p ∷ q)      (r ∷ s)     = trans′ p r ∷′ trans-≋ʳ q s
+trans-≋ʳ (swap p q r) (s ∷ t ∷ u) = swap (trans′ p t) (trans′ q s) (trans-≋ʳ r u)
+
+split : ∀ (α : Factor n) (αs βs : Product n) {γs}
+  → γs ≅ (αs * α ∷ βs)
+  → ∃₂ λ (xs : Product _) ys → γs ≋ (xs * α ∷ ys) × (xs * ys) ≅ (αs * βs)
+split α αs βs p = helper αs βs p ≋-refl
+  where
+    helper : ∀ (αs βs : Product _) {γs δs}
+      → γs ≅ δs
+      → δs ≋ αs * α ∷ βs
+      → ∃₂ λ (xs : Product _) ys → γs ≋ (xs * α ∷ ys) × (xs * ys) ≅ (αs * βs)
+    helper unit βs refl (p ∷ s) = unit , _ , p ∷ ≋-refl , ≋⇒≅ s
+    helper (α ∷ αs) βs refl s = _ ∷ αs , βs , s , refl
+    helper αs βs (trans p q) s
+      using xs  , ys  , eq  , h  ← helper αs βs q s
+      using xs′ , ys′ , eq′ , h′ ← helper xs ys p eq
+      = xs′ , ys′ , eq′ , trans′ h′ h
+    helper unit βs (p ∷ q) (r ∷ s) = unit , _ , trans′ p r ∷ ≋-refl , trans-≋ʳ q s
+    helper (α ∷ αs) βs (p ∷ q) (r ∷ s)
+      using xs , ys , eq , h ← helper αs βs q s
+      = α ∷ xs , ys , trans′ p r ∷ eq , refl ∷′ h
+    helper unit unit (swap _ _ _) (_ ∷ ())
+    helper unit (β ∷ _) (swap p q r) (s ∷ t ∷ u) =
+      β ∷ unit , _ , trans′ p t ∷ trans′ q s ∷ ≋-refl , refl ∷′ trans-≋ʳ r u
+    helper (α ∷ unit) βs (swap p q r) (s ∷ t ∷ u) =
+      unit , α ∷ _ , trans′ p t ∷ trans′ q s ∷ ≋-refl , refl ∷′ trans-≋ʳ r u
+    helper (α ∷ α′ ∷ αs) βs (swap p q r) (s ∷ t ∷ u)
+      using xs , ys , eq , h ← helper αs βs r u
+      = α′ ∷ α ∷ xs , ys , trans′ p t ∷ trans′ q s ∷ eq , swap refl refl h
+
+differentHead : {α β : Factor n} {αs βs : Product n}
+  → ¬ α ≅ β
+  → α ∷ αs ≅ β ∷ βs
+  → ∃[ γs ] (αs ≅ β ∷ γs) × (α ∷ γs ≅ βs)
+differentHead {α = α} {β} {αs} {βs} neq p with split β unit βs p
+... | unit   , _  , q ∷ _ , _ = contradiction q neq
+... | x ∷ xs , ys , q ∷ r , s =
+      xs * ys , trans-≋ˡ r (sym (shift refl xs ys)) , trans′ (q ∷′ refl) s
+
+dropMiddleElement-≋ : ∀ {α : Factor n} (αs βs : Product n) {γs δs}
+  → αs * α ∷ γs ≋ βs * α ∷ δs
+  → αs * γs ≅ βs * δs
+dropMiddleElement-≋ unit     unit     (_ ∷ p) = ≋⇒≅ p
+dropMiddleElement-≋ unit     (β ∷ βs) (p ∷ q) = trans-≋ˡ q (sym (shift (sym p) βs _))
+dropMiddleElement-≋ (α ∷ αs) unit     (p ∷ q) = trans-≋ʳ (shift p αs _) q
+dropMiddleElement-≋ (α ∷ αs) (β ∷ βs) (p ∷ q) = p ∷′ dropMiddleElement-≋ αs βs q
+
+dropMiddleElement : ∀ {α : Factor n} (αs βs : Product n) {γs δs}
+  → αs * α ∷ γs ≅ βs * α ∷ δs
+  → αs * γs ≅ βs * δs
+dropMiddleElement {α = α} αs βs {γs} {δs} p
+  using xs , ys , eq , h ← split α βs δs p
+  = trans′ (dropMiddleElement-≋ {α = α} αs xs eq) h
+
+drop-∷ : {α : Factor n} {αs βs : Product n} → α ∷ αs ≅ α ∷ βs → αs ≅ βs
+drop-∷ = dropMiddleElement unit unit
+
+_≟_ : (α β : NF n s) → Dec (α ≅ β)
+# x    ≟ # y    = Dec.map′ #′_ #-injective (x Fin.≟ y)
+# x    ≟ list α = no λ ()
+list α ≟ # y    = no λ ()
+list α ≟ list β = Dec.map′ list′ list-injective (α ≟ β)
+α ▶ α′ ≟ β ▶ β′ = Dec.map′ (λ (p , q) → p ▶′ q) ▶-injective (α ≟ β ×-dec α′ ≟ β′)
+_≟_ {s = product} α β with length α ℕ.≟ length β
+... | false because neq = no (contraposition α≅β⇒|α|≡|β| (invert neq))
+... | true  because eq  = worker α β (invert eq)
+  where
+    find : (α : Factor n) (β : Product n) → Dec (∃[ γ ] α ∷ γ ≅ β)
+    find α unit     = no λ (_ , h) → contradiction (sym h) ¬unit≅cons
+    find α (β ∷ βs) with α ≟ β
+    ... | true  because p = yes (βs , invert p ∷′ refl)
+    ... | false because p = Dec.map′ fwd bwd (find α βs)
+      where
+        fwd : ∃[ γs ] α ∷ γs ≅ βs → ∃[ γs ] α ∷ γs ≅ β ∷ βs
+        fwd (γs , p) = β ∷ γs , trans′ (swap refl refl refl) (refl ∷′ p)
+
+        bwd : ∃[ γs ] α ∷ γs ≅ β ∷ βs → ∃[ γs ] α ∷ γs ≅ βs
+        bwd (γs , q) using δs , _ , r ← differentHead (invert p) q = δs , r
+
+    worker : (α β : Product n) → length α ≡ length β → Dec (α ≅ β)
+    worker unit     unit _  = yes refl
+    worker (α ∷ αs) βs   eq with find α βs
+    ... | false because p = no (contraposition (_ ,_) (invert p))
+    ... | yes (γs , p) = Dec.map′ fwd bwd (worker αs γs eq′)
+      where
+        fwd : αs ≅ γs → α ∷ αs ≅ βs
+        fwd q = trans′ (refl ∷′ q) p
+
+        bwd : α ∷ αs ≅ βs → αs ≅ γs
+        bwd q = drop-∷ (trans′ q (sym p))
+
+        eq′ : length αs ≡ length γs
+        eq′ = suc-injective (≡.trans eq (≡.sym (α≅β⇒|α|≡|β| p)))
 
 --------------------------------------------------------------------------------
--- Interpretation into ↔
 
-×-swap : ∀ {a b c} (A : Set a) (B : Set b) (C : Set c) →
-         (A × B × C) ↔ (B × A × C)
-×-swap A B C = mk↔ₛ′ (λ (x , y , z) → y , x , z) (λ (y , x , z) → x , y , z)
-                     (λ _ → ≡.refl) (λ _ → ≡.refl)
+isEquivalence : ∀ n s → IsEquivalence (_≅_ {n} {s})
+isEquivalence n s = record { refl = refl ; sym = sym ; trans = trans′ }
 
--- Need extensionality for →-cong-↔ :(
-module _ (ext : Extensionality ℓ ℓ) where
+isDecEquivalence : ∀ n s → IsDecEquivalence (_≅_ {n} {s})
+isDecEquivalence n s = record { isEquivalence = isEquivalence n s ; _≟_ = _≟_ }
 
-  {-# TERMINATING #-} -- Uh oh
-  ≅ᵃ⟦_⟧ : {α β : Atom n} → α ≅ᵃ β → (ρ : Ctx⟦ n ⟧ ℓ) → Atom⟦ α ⟧ ρ ↔ Atom⟦ β ⟧ ρ
-  ≅ᶠ⟦_⟧ : {φ ψ : Factor n} → φ ≅ᶠ ψ → (ρ : Ctx⟦ n ⟧ ℓ) → Factor⟦ φ ⟧ ρ ↔ Factor⟦ ψ ⟧ ρ
-  ≅ⁿ⟦_⟧ : {ν μ : NF n} → ν ≅ⁿ μ → (ρ : Ctx⟦ n ⟧ ℓ) → NF⟦ ν ⟧ ρ ↔ NF⟦ μ ⟧ ρ
+setoid : ℕ → Sort → Setoid _ _
+setoid n s = record { isEquivalence = isEquivalence n s }
 
-  ≅ᵃ⟦ var ≡.refl ⟧ ρ = ↔-refl
-  ≅ᵃ⟦ `List ν≅μ  ⟧ ρ = List-cong (≅ⁿ⟦ ν≅μ ⟧ ρ)
-
-  ≅ᶠ⟦ ν≅μ `→ α≅β ⟧ ρ = →-cong-↔ ext ext (≅ⁿ⟦ ν≅μ ⟧ ρ) (≅ᵃ⟦ α≅β ⟧ ρ)
-
-  ≅ⁿ⟦ ↭.refl ν≋μ         ⟧ ρ = =̇.rec (λ {ν} {μ} _ → NF⟦ ν ⟧ ρ ↔ NF⟦ μ ⟧ ρ) (λ φ≋ψ → ×-cong (≅ᶠ⟦ φ≋ψ ⟧ ρ)) ↔-refl ν≋μ
-  ≅ⁿ⟦ ↭.prep φ≋ψ ν≋μ     ⟧ ρ = ×-cong (≅ᶠ⟦ φ≋ψ ⟧ ρ) (≅ⁿ⟦ ν≋μ ⟧ ρ)
-  ≅ⁿ⟦ ↭.swap φ≋ψ ε≅θ ν≋μ ⟧ ρ = ↔-trans (×-cong (≅ᶠ⟦ φ≋ψ ⟧ ρ) (×-cong (≅ᶠ⟦ ε≅θ ⟧ ρ) (≅ⁿ⟦ ν≋μ ⟧ ρ))) (×-swap _ _ _)
-  ≅ⁿ⟦ ↭.trans ν≋μ μ≋ι    ⟧ ρ = ↔-trans (≅ⁿ⟦ ν≋μ ⟧ ρ) (≅ⁿ⟦ μ≋ι ⟧ ρ)
+decSetoid : ℕ → Sort → DecSetoid _ _
+decSetoid n s = record { isDecEquivalence = isDecEquivalence n s }
