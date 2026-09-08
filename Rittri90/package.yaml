@@ -5,47 +5,27 @@ author: "Satoshi Takimoto"
 maintainer: "wasabi.nvim.st@gmail.com"
 copyright: "2025 Satoshi Takimoto"
 
-language: GHC2021
+language: GHC2024
 
 default-extensions:
   - AllowAmbiguousTypes
-  - BangPatterns
   - BlockArguments
   - CPP
-  - ConstraintKinds
-  - DataKinds
   - DerivingVia
-  - ExplicitNamespaces
-  - FlexibleContexts
-  - FlexibleInstances
-  - FunctionalDependencies
-  - GADTs
-  - InstanceSigs
-  - ImplicitParams
-  - KindSignatures
-  - LambdaCase
-  - MagicHash
+  - DeriveAnyClass
+  - DuplicateRecordFields
+  - MultilineStrings
   - MultiParamTypeClasses
-  - MultiWayIf
   - NoFieldSelectors
+  - OrPatterns
+  - OverloadedLabels
   - OverloadedStrings
   - OverloadedRecordDot
-  - PackageImports
   - PatternSynonyms
-  - PolyKinds
   - QualifiedDo
-  - RankNTypes
-  - ScopedTypeVariables
-  - StandaloneDeriving
-  - StandaloneKindSignatures
+  - RecordWildCards
   - Strict
-  - TemplateHaskell
-  - TypeApplications
   - TypeFamilies
-  - TypeFamilyDependencies
-  - UndecidableInstances
-  - UnboxedTuples
-  - UnboxedSums
   - ViewPatterns
 
 dependencies:

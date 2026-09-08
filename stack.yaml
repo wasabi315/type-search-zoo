@@ -1,0 +1,10 @@
+resolver: nightly-2025-08-02
+compiler: ghc-9.12.2
+
+packages:
+  - Lang78
+  - Rittri89
+  - Rittri90
+  - DiCosmo91
+  - NPS93
+  - Delahaye2000

@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.39.6.
 --
 -- see: https://github.com/sol/hpack
 
@@ -22,44 +22,24 @@ executable Lang78
       ./
   default-extensions:
       AllowAmbiguousTypes
-      BangPatterns
       BlockArguments
       CPP
-      ConstraintKinds
-      DataKinds
       DerivingVia
-      ExplicitNamespaces
-      FlexibleContexts
-      FlexibleInstances
-      FunctionalDependencies
-      GADTs
-      InstanceSigs
-      ImplicitParams
-      KindSignatures
-      LambdaCase
-      MagicHash
+      DeriveAnyClass
+      DuplicateRecordFields
+      MultilineStrings
       MultiParamTypeClasses
       MultiWayIf
       NoFieldSelectors
-      OverloadedLists
+      OrPatterns
+      OverloadedLabels
       OverloadedStrings
       OverloadedRecordDot
-      PackageImports
       PatternSynonyms
-      PolyKinds
       QualifiedDo
-      RankNTypes
-      ScopedTypeVariables
-      StandaloneDeriving
-      StandaloneKindSignatures
+      RecordWildCards
       Strict
-      TemplateHaskell
-      TypeApplications
       TypeFamilies
-      TypeFamilyDependencies
-      UndecidableInstances
-      UnboxedTuples
-      UnboxedSums
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-deriving-strategies -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -funbox-strict-fields
   build-depends:
@@ -70,4 +50,4 @@ executable Lang78
     , logict
     , megaparsec
     , text
-  default-language: GHC2021
+  default-language: GHC2024
