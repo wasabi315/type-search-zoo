@@ -31,7 +31,7 @@ infixr 4 `Arr`
 
 type Name = Text
 
-data Scheme = Scheme [Name] Ty
+data Scheme = Forall [Name] Ty
   deriving stock (Show)
 
 data Ty
@@ -51,7 +51,7 @@ freeVarSet = \case
   List a -> freeVarSet a
 
 closeTy :: Ty -> Scheme
-closeTy a = Scheme xs a
+closeTy a = Forall xs a
   where
     xs = S.toList $ freeVarSet a
 
@@ -134,10 +134,10 @@ reduce = \case
 
 -- check if two types are equal modulo the axioms and α-equivalence
 equiv :: Scheme -> Scheme -> Bool
-equiv (Scheme xs _) (Scheme ys _)
+equiv (Forall xs _) (Forall ys _)
   -- check the schemes bind the same number of variables
   | length xs /= length ys = False
-equiv (Scheme xs a) (Scheme ys b) =
+equiv (Forall xs a) (Forall ys b) =
   any (\ren -> a' == reduce (rename ren b)) rens
   where
     a' = reduce a
@@ -194,7 +194,7 @@ pScheme = do
     xs <- many pName
     _ <- symbol "."
     pure xs
-  Scheme xs <$> pTy
+  Forall xs <$> pTy
 
 parseTy :: Text -> Either (ParseErrorBundle Text Void) Ty
 parseTy = parse (pTy <* eof) ""
@@ -211,7 +211,7 @@ prettyTy p = \case
   List a -> showString "[" . prettyTy 0 a . showString "]"
 
 prettyScheme :: Scheme -> ShowS
-prettyScheme (Scheme xs a) =
+prettyScheme (Forall xs a) =
   showString "forall"
     . foldr ((.) . (showChar ' ' .) . showString . T.unpack) id xs
     . showString ". "
